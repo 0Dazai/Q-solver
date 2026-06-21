@@ -29,21 +29,13 @@ const formattedTime = computed(() => {
 })
 
 onMounted(() => {
-  timerInterval = setInterval(() => {
-    currentTime.value = Date.now()
-  }, 30)
+  timerInterval = setInterval(() => { currentTime.value = Date.now() }, 30)
 })
 
-onUnmounted(() => {
-  if (timerInterval) clearInterval(timerInterval)
-})
+onUnmounted(() => { if (timerInterval) clearInterval(timerInterval) })
 </script>
 
 <style scoped>
-/* ========================================
-   Loading Container
-   ======================================== */
-
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -52,36 +44,31 @@ onUnmounted(() => {
   height: 100%;
   width: 100%;
   background: transparent;
-  animation: containerFadeIn 0.5s ease-out;
+  animation: containerFadeIn 0.4s var(--ease-out);
 }
 
 .loader-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--sp-6);
 }
-
-/* ========================================
-   Orb Animation
-   ======================================== */
 
 .orb-container {
   position: relative;
-  width: 90px;
-  height: 90px;
+  width: 80px;
+  height: 80px;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .orb {
-  width: 36px;
-  height: 36px;
-  background: radial-gradient(circle at 30% 30%, #a7f3d0, var(--color-primary));
+  width: 32px;
+  height: 32px;
+  background: var(--accent-gradient);
   border-radius: 50%;
-  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6), 
-              0 0 60px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 24px var(--accent-glow), 0 0 48px var(--accent-muted);
   animation: orbBreathe 3s ease-in-out infinite;
   z-index: 2;
 }
@@ -89,39 +76,34 @@ onUnmounted(() => {
 .ring {
   position: absolute;
   border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: rgba(16, 185, 129, 0.5);
-  border-right-color: rgba(16, 185, 129, 0.2);
+  border: 1.5px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-muted);
 }
 
 .ring-1 {
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
   animation: ringSpin 2.5s linear infinite;
 }
 
 .ring-2 {
-  width: 84px;
-  height: 84px;
-  border-top-color: rgba(16, 185, 129, 0.3);
-  border-left-color: rgba(16, 185, 129, 0.5);
+  width: 74px;
+  height: 74px;
+  border-top-color: var(--accent-border);
+  border-left-color: var(--accent);
   animation: ringSpin 3.5s linear infinite reverse;
 }
-
-/* ========================================
-   Loading Text
-   ======================================== */
 
 .loading-text {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  font-family: var(--font-sans);
+  gap: var(--sp-3);
 }
 
 .text {
   font-size: var(--text-base);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   letter-spacing: 0.5px;
 }
@@ -129,49 +111,32 @@ onUnmounted(() => {
 .timer {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-  padding: var(--space-1) var(--space-3);
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
+  background: var(--accent-muted);
+  padding: var(--sp-1) var(--sp-3);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid var(--accent-border);
 }
 
-/* ========================================
-   Animations
-   ======================================== */
-
 @keyframes containerFadeIn {
-  from { 
-    opacity: 0; 
-    transform: translateY(10px); 
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes orbBreathe {
-  0%, 100% { 
-    transform: scale(0.92); 
-    box-shadow: 0 0 25px rgba(16, 185, 129, 0.5), 
-                0 0 50px rgba(16, 185, 129, 0.2);
+  0%, 100% {
+    transform: scale(0.92);
+    box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-muted);
   }
-  50% { 
-    transform: scale(1.08); 
-    box-shadow: 0 0 40px rgba(16, 185, 129, 0.7), 
-                0 0 80px rgba(16, 185, 129, 0.35);
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 32px var(--accent-glow), 0 0 64px var(--accent-muted);
   }
 }
 
 @keyframes ringSpin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 </style>

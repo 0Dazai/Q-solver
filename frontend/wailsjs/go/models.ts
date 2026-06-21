@@ -3,9 +3,10 @@ export namespace config {
 	export class Config {
 	    apiKey?: string;
 	    provider?: string;
-	    model?: string;
 	    baseURL?: string;
+	    model?: string;
 	    prompt?: string;
+	    domainId?: string;
 	    opacity?: number;
 	    noCompression?: boolean;
 	    compressionQuality?: number;
@@ -16,17 +17,11 @@ export namespace config {
 	    screenshotMode?: string;
 	    resumePath?: string;
 	    resumeContent?: string;
-	    useMarkdownResume?: boolean;
 	    shortcuts?: Record<string, shortcut.KeyBinding>;
-	    temperature?: number;
-	    topP?: number;
-	    topK?: number;
-	    maxTokens?: number;
-	    thinkingBudget?: number;
 	    assistantModel?: string;
-	    useLiveApi?: boolean;
 	    windowWidth?: number;
 	    windowHeight?: number;
+	    theme?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -36,9 +31,10 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.apiKey = source["apiKey"];
 	        this.provider = source["provider"];
-	        this.model = source["model"];
 	        this.baseURL = source["baseURL"];
+	        this.model = source["model"];
 	        this.prompt = source["prompt"];
+	        this.domainId = source["domainId"];
 	        this.opacity = source["opacity"];
 	        this.noCompression = source["noCompression"];
 	        this.compressionQuality = source["compressionQuality"];
@@ -49,17 +45,68 @@ export namespace config {
 	        this.screenshotMode = source["screenshotMode"];
 	        this.resumePath = source["resumePath"];
 	        this.resumeContent = source["resumeContent"];
-	        this.useMarkdownResume = source["useMarkdownResume"];
 	        this.shortcuts = this.convertValues(source["shortcuts"], shortcut.KeyBinding, true);
-	        this.temperature = source["temperature"];
-	        this.topP = source["topP"];
-	        this.topK = source["topK"];
-	        this.maxTokens = source["maxTokens"];
-	        this.thinkingBudget = source["thinkingBudget"];
 	        this.assistantModel = source["assistantModel"];
-	        this.useLiveApi = source["useLiveApi"];
 	        this.windowWidth = source["windowWidth"];
 	        this.windowHeight = source["windowHeight"];
+	        this.theme = source["theme"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace domain {
+	
+	export class DomainItem {
+	    id: string;
+	    label: string;
+	    icon: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DomainItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.icon = source["icon"];
+	        this.description = source["description"];
+	    }
+	}
+	export class Category {
+	    id: string;
+	    label: string;
+	    items: DomainItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Category(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.items = this.convertValues(source["items"], DomainItem);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

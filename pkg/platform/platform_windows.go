@@ -445,8 +445,8 @@ func applyGhostMode(hwnd uintptr) {
 
 	exStyle := GetWindowLong(hwnd, int(GWL_EXSTYLE))
 
-	//TOOLWINDOW (隐藏任务栏) | NOACTIVATE (不抢焦点) | TOPMOST (置顶)
-	newExStyle := (exStyle &^ WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST
+	// APPWINDOW keeps the app reachable from the taskbar; F9 stealth is handled by display affinity.
+	newExStyle := (exStyle &^ WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST
 	SetWindowLong(hwnd, int(GWL_EXSTYLE), int32(newExStyle))
 
 	// 优先尝试"隐身(透明)"，如果失败降级为"黑屏"

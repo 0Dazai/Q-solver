@@ -3,24 +3,14 @@ module Q-Solver
 go 1.24.1
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.19.0
-	github.com/gen2brain/malgo v0.11.24
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
 	github.com/openai/openai-go v1.12.0
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.design/x/hotkey v0.4.1
-	google.golang.org/genai v1.40.0
 )
 
 require (
-	cloud.google.com/go v0.116.0 // indirect
-	cloud.google.com/go/auth v0.9.3 // indirect
-	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/s2a-go v0.1.8 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
@@ -28,11 +18,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/image v0.12.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.66.2 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
 )
 
 require (

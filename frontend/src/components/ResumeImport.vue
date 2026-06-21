@@ -1,875 +1,520 @@
 <template>
-    <div class="resume-import">
-        <!-- Empty State - No file selected -->
-        <div v-if="!resumePath" class="empty-state">
-            <div class="empty-state-card" @click="$emit('select-resume')">
-                <div class="upload-icon-wrapper">
-                    <div class="upload-icon">📄</div>
-                    <div class="upload-pulse"></div>
-                </div>
-                <h3 class="empty-title">导入 PDF 简历</h3>
-                <p class="empty-desc">AI 将在解题时参考您的背景信息，提供更个性化的回答</p>
-                <button class="btn-upload">
-                    <span class="btn-icon">📂</span>
-                    选择文件
-                </button>
-                <p class="empty-hint">支持 .pdf 格式</p>
-            </div>
+  <div class="resume-import">
+    <div v-if="!resumePath" class="empty-state">
+      <div class="upload-card" @click="$emit('select-resume')">
+        <div class="upload-visual">
+          <div class="upload-icon-wrap">
+            <Icon name="file" :size="28" class="upload-icon" />
+          </div>
+          <div class="upload-glow"></div>
         </div>
-
-        <!-- File Selected State -->
-        <div v-else class="resume-content">
-            <!-- File Info Header -->
-            <div class="file-header">
-                <div class="file-info">
-                    <div class="file-icon-box">
-                        <svg class="pdf-icon" viewBox="0 0 24 24" fill="none">
-                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z"
-                                fill="currentColor" opacity="0.2" />
-                            <path d="M14 2V8H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                                stroke-linejoin="round" />
-                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z"
-                                stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                                stroke-linejoin="round" />
-                        </svg>
-                    </div>
-                    <div class="file-meta">
-                        <span class="file-name">{{ fileName }}</span>
-                        <span class="file-type">PDF 文档</span>
-                    </div>
-                </div>
-                <div class="file-actions">
-                    <!-- Use Markdown Toggle -->
-                    <div class="toggle-chip" :class="{ active: useMarkdownResume }"
-                        @click="$emit('update:useMarkdownResume', !useMarkdownResume)" title="使用解析后的 Markdown 文本">
-                        <span class="toggle-dot"></span>
-                        <span>Markdown 模式</span>
-                    </div>
-                    <!-- Menu Button -->
-                    <div class="menu-wrapper">
-                        <button class="btn-menu" @click="showMenu = !showMenu">⋮</button>
-                        <div v-if="showMenu" class="dropdown-menu">
-                            <div class="menu-item" @click="handleMenuAction('change')">
-                                <span>📂</span> 更换文件
-                            </div>
-                            <div class="menu-item danger" @click="handleMenuAction('clear')">
-                                <span>🗑️</span> 清除简历
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Area -->
-            <div class="content-area">
-                <!-- Status Card (no markdown yet) -->
-                <div v-if="!localContent && !isEditing" class="status-card">
-                    <div class="status-icon">📄</div>
-                    <h4 class="status-title">文件已就绪</h4>
-                    <p class="status-desc">点击 AI 解析将 PDF 转换为 Markdown 格式</p>
-
-                    <div class="status-actions">
-                        <button class="btn-parse-lg" @click="handleParseClick" :disabled="isParsing">
-                            <span v-if="!isParsing">✨</span>
-                            <span v-else class="spin">⏳</span>
-                            {{ isParsing ? '解析中...' : 'AI 解析为 Markdown' }}
-                        </button>
-                        <button class="btn-secondary-lg" @click="isEditing = true">
-                            📝 手动输入
-                        </button>
-                    </div>
-
-                    <p v-if="!modelSupportsFile" class="status-warning">
-                        ⚠️ 当前模型可能不支持 PDF 解析
-                    </p>
-                </div>
-
-                <!-- Parsing State -->
-                <div v-else-if="isParsing && !localContent" class="status-card parsing">
-                    <span class="spin large">⏳</span>
-                    <h4 class="status-title">AI 正在解析</h4>
-                    <p class="status-desc">正在将 PDF 转换为 Markdown...</p>
-                </div>
-
-                <!-- Markdown Content -->
-                <div v-else class="markdown-panel">
-                    <!-- Toolbar -->
-                    <div class="markdown-toolbar">
-                        <div class="toolbar-tabs">
-                            <button class="toolbar-btn" :class="{ active: !isEditing }" @click="isEditing = false">
-                                预览
-                            </button>
-                            <button class="toolbar-btn" :class="{ active: isEditing }" @click="isEditing = true">
-                                编辑
-                            </button>
-                        </div>
-                        <div class="toolbar-actions">
-                            <button class="btn-reparse" @click="handleParseClick" :disabled="isParsing" title="重新解析">
-                                <span v-if="!isParsing">🔄</span>
-                                <span v-else class="spin">⏳</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Editor -->
-                    <div v-if="isEditing" class="editor-wrapper">
-                        <textarea v-model="localContent" @input="updateContent" class="md-editor"
-                            placeholder="在此输入或粘贴 Markdown 格式的简历内容..."></textarea>
-                    </div>
-
-                    <!-- Preview -->
-                    <div v-else class="md-preview" v-html="renderedContent"></div>
-                </div>
-            </div>
+        <div class="upload-text">
+          <h3 class="upload-title">导入 PDF 简历</h3>
+          <p class="upload-desc">AI 会在解题时参考你的背景信息，提供更贴近场景的回答。</p>
         </div>
-
-        <!-- Confirm Dialog -->
-        <Teleport to="body">
-            <div v-if="showConfirmDialog" class="dialog-overlay" @click.self="showConfirmDialog = false">
-                <div class="dialog-box">
-                    <div class="dialog-icon">⚠️</div>
-                    <h4>模型可能不支持</h4>
-                    <p>当前模型可能不支持 PDF 解析，是否仍要继续？</p>
-                    <div class="dialog-actions">
-                        <button class="btn-cancel" @click="showConfirmDialog = false">取消</button>
-                        <button class="btn-confirm" @click="confirmParse">继续</button>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
+        <div class="upload-action">
+          <span class="upload-btn">
+            <Icon name="download" :size="14" />
+            <span>选择文件</span>
+          </span>
+          <span class="upload-hint">支持 .pdf 格式</span>
+        </div>
+      </div>
     </div>
+
+    <div v-else class="resume-content">
+      <div class="file-bar">
+        <div class="file-info">
+          <div class="file-icon-box">
+            <Icon name="file" :size="16" class="pdf-icon" />
+          </div>
+          <div class="file-meta">
+            <span class="file-name">{{ fileName }}</span>
+            <span class="file-badge">PDF</span>
+          </div>
+        </div>
+        <div class="file-actions">
+          <button class="action-btn" @click="$emit('select-resume')" title="更换文件">
+            <Icon name="refresh" :size="14" />
+          </button>
+          <button class="action-btn danger" @click="$emit('clear-resume')" title="清除简历">
+            <Icon name="trash" :size="14" />
+          </button>
+        </div>
+      </div>
+
+      <div v-if="isParsing" class="status-card">
+        <div class="parsing-visual">
+          <div class="parse-spinner"></div>
+        </div>
+        <div class="status-text">
+          <span class="status-title">正在解析简历</span>
+          <span class="status-desc">当前会直接调用你配置的模型接口，将 PDF 解析为 Markdown，请稍候。</span>
+        </div>
+      </div>
+
+      <div v-else-if="!localContent && !isEditing" class="status-card">
+        <div class="error-visual">
+          <Icon name="alert-triangle" :size="24" class="error-icon" />
+        </div>
+        <div class="status-text">
+          <span class="status-title">暂未生成解析结果</span>
+          <span class="status-desc">你可以重新解析，也可以直接手动粘贴或编辑 Markdown 内容。</span>
+        </div>
+        <button class="retry-btn" @click="$emit('parse-resume')">
+          <Icon name="refresh" :size="13" />
+          <span>重新解析</span>
+        </button>
+      </div>
+
+      <div v-else class="md-panel">
+        <div class="md-toolbar">
+          <div class="toolbar-tabs">
+            <button class="tab-btn" :class="{ active: !isEditing }" @click="isEditing = false">预览</button>
+            <button class="tab-btn" :class="{ active: isEditing }" @click="isEditing = true">编辑</button>
+          </div>
+          <div class="toolbar-right">
+            <button class="toolbar-icon-btn" @click="$emit('parse-resume')" :disabled="isParsing" title="重新解析">
+              <Icon name="refresh" :size="14" :spinning="isParsing" />
+            </button>
+          </div>
+        </div>
+
+        <div v-if="isEditing" class="editor-wrap">
+          <textarea
+            v-model="localContent"
+            @input="updateContent"
+            class="md-editor"
+            placeholder="在此输入或粘贴 Markdown 格式的简历内容..."
+          ></textarea>
+        </div>
+
+        <div v-else class="md-preview md-body" v-html="renderedContent"></div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { marked } from 'marked';
-import { supportsVision, supportsPDF } from '../utils/modelCapabilities';
+import { computed, ref, watch } from 'vue'
+import { marked } from 'marked'
+import Icon from './Icon.vue'
 
 const props = defineProps({
-    resumePath: { type: String, default: '' },
-    rawContent: { type: String, default: '' },
-    isParsing: { type: Boolean, default: false },
-    useMarkdownResume: { type: Boolean, default: false },
-    currentModel: { type: String, default: '' }
-});
+  resumePath: { type: String, default: '' },
+  rawContent: { type: String, default: '' },
+  isParsing: { type: Boolean, default: false },
+})
 
-const emit = defineEmits(['select-resume', 'clear-resume', 'parse-resume', 'update:rawContent', 'update:useMarkdownResume']);
+const emit = defineEmits(['select-resume', 'clear-resume', 'parse-resume', 'update:rawContent'])
 
-// UI State
-const isEditing = ref(false);
-const showMenu = ref(false);
-const showConfirmDialog = ref(false);
-const localContent = ref(props.rawContent);
+const isEditing = ref(false)
+const localContent = ref(props.rawContent)
 
-// Computed
-const modelSupportsFile = computed(() => supportsVision(props.currentModel) || supportsPDF(props.currentModel));
 const fileName = computed(() => {
-    if (!props.resumePath) return '';
-    return props.resumePath.split(/[\\/]/).pop() || 'resume.pdf';
-});
+  if (!props.resumePath) return ''
+  return props.resumePath.split(/[\\/]/).pop() || 'resume.pdf'
+})
+
 const renderedContent = computed(() => {
-    if (!localContent.value) return '';
-    return marked.parse(localContent.value);
-});
+  if (!localContent.value) return ''
+  return marked.parse(localContent.value)
+})
 
-// Watchers
 watch(() => props.rawContent, (newVal) => {
-    if (newVal !== localContent.value) {
-        localContent.value = newVal;
-    }
-});
+  if (newVal !== localContent.value) localContent.value = newVal
+})
 
-// Click outside to close menu
-watch(showMenu, (val) => {
-    if (val) {
-        setTimeout(() => {
-            document.addEventListener('click', closeMenu);
-        }, 0);
-    }
-});
-
-function closeMenu() {
-    showMenu.value = false;
-    document.removeEventListener('click', closeMenu);
-}
-
-// Content Functions
 function updateContent() {
-    emit('update:rawContent', localContent.value);
-}
-
-// Action Handlers
-function handleParseClick() {
-    if (!modelSupportsFile.value) {
-        showConfirmDialog.value = true;
-    } else {
-        emit('parse-resume');
-    }
-}
-
-function confirmParse() {
-    showConfirmDialog.value = false;
-    emit('parse-resume');
-}
-
-function handleMenuAction(action) {
-    showMenu.value = false;
-    switch (action) {
-        case 'change':
-            emit('select-resume');
-            break;
-        case 'clear':
-            emit('clear-resume');
-            break;
-    }
+  emit('update:rawContent', localContent.value)
 }
 </script>
 
 <style scoped>
-/* ========================================
-   Resume Import - Simplified UI
-   ======================================== */
-
 .resume-import {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    color: #fff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary);
 }
-
-/* ========================================
-   Empty State
-   ======================================== */
 
 .empty-state {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
 }
 
-.empty-state-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 40px 50px;
-    background: linear-gradient(145deg, rgba(40, 40, 50, 0.6), rgba(30, 30, 40, 0.8));
-    border: 2px dashed rgba(99, 102, 241, 0.3);
-    border-radius: 16px;
-    cursor: pointer;
-    transition: all 0.3s ease;
+.upload-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-8) var(--sp-10);
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--duration-base) var(--ease-smooth);
+  text-align: center;
+  max-width: 340px;
 }
 
-.empty-state-card:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: linear-gradient(145deg, rgba(50, 50, 65, 0.7), rgba(35, 35, 50, 0.9));
-    transform: translateY(-2px);
+.upload-card:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-muted);
 }
 
-.upload-icon-wrapper {
-    position: relative;
-    margin-bottom: 20px;
+.upload-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.upload-icon {
-    font-size: 48px;
-    position: relative;
-    z-index: 1;
+.upload-icon-wrap {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-muted);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  position: relative;
+  z-index: 1;
 }
 
-.upload-pulse {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 80px;
-    height: 80px;
-    background: rgba(99, 102, 241, 0.15);
-    border-radius: 50%;
-    animation: pulse 2s infinite;
+.upload-glow {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(16px);
+  animation: breathe 3s ease-in-out infinite;
 }
 
-@keyframes pulse {
-
-    0%,
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 0.5;
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.15);
-        opacity: 0.2;
-    }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.15); opacity: 0.7; }
 }
 
-.empty-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0 0 8px 0;
-    color: #fff;
+.upload-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
 }
 
-.empty-desc {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
-    margin: 0 0 20px 0;
-    text-align: center;
-    max-width: 240px;
+.upload-desc {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+  max-width: 240px;
 }
 
-.btn-upload {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: none;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
+.upload-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-.btn-upload:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--accent-gradient);
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  transition: all var(--duration-fast) ease;
 }
 
-.empty-hint {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.3);
-    margin: 12px 0 0 0;
-}
+.upload-card:hover .upload-btn { box-shadow: var(--shadow-accent); }
 
-/* ========================================
-   File Header
-   ======================================== */
+.upload-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
 
 .resume-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 0;
 }
 
-.file-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 18px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
-    border-radius: 12px;
-    border: 1px solid rgba(99, 102, 241, 0.15);
+.file-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-2-5) var(--sp-3);
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .file-info {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2-5);
 }
 
 .file-icon-box {
-    width: 42px;
-    height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
-    border-radius: 10px;
-    border: 1px solid rgba(99, 102, 241, 0.2);
-}
-
-.pdf-icon {
-    width: 22px;
-    height: 22px;
-    color: #a5b4fc;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
 }
 
 .file-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
 .file-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
-    letter-spacing: 0.2px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.file-type {
-    font-size: 11px;
-    color: rgba(165, 180, 252, 0.7);
-    font-weight: 500;
+.file-badge {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-muted);
+  color: var(--accent);
+  letter-spacing: 0.5px;
 }
 
 .file-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  display: flex;
+  gap: var(--sp-1);
 }
 
-.toggle-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    transition: all 0.2s;
+.action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
 }
 
-.toggle-chip:hover {
-    background: rgba(255, 255, 255, 0.08);
+.action-btn:hover {
+  background: var(--surface-card-hover);
+  color: var(--text-primary);
 }
 
-.toggle-chip.active {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.3);
-    color: #a5b4fc;
+.action-btn.danger:hover {
+  background: var(--error-bg);
+  color: var(--color-error);
 }
-
-.toggle-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    transition: all 0.2s;
-}
-
-.toggle-chip.active .toggle-dot {
-    background: #6366f1;
-    box-shadow: 0 0 6px rgba(99, 102, 241, 0.5);
-}
-
-.menu-wrapper {
-    position: relative;
-}
-
-.btn-menu {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-menu:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.dropdown-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
-    min-width: 140px;
-    background: #2a2a35;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    z-index: 100;
-    overflow: hidden;
-}
-
-.menu-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.menu-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.menu-item.danger {
-    color: #f87171;
-}
-
-.menu-item.danger:hover {
-    background: rgba(248, 113, 113, 0.1);
-}
-
-/* ========================================
-   Content Area
-   ======================================== */
-
-.content-area {
-    flex: 1;
-    min-height: 0;
-    border-radius: 10px;
-    overflow: hidden;
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* ========================================
-   Status Card
-   ======================================== */
 
 .status-card {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 40px;
-    text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-8);
+  text-align: center;
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
-.status-card.parsing {
-    gap: 16px;
+.parse-spinner {
+  width: 36px;
+  height: 36px;
+  border: 2.5px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.status-icon {
-    font-size: 48px;
-    opacity: 0.8;
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-visual {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+}
+
+.error-icon { color: var(--color-warning); }
+
+.status-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
 }
 
 .status-title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
 }
 
 .status-desc {
-    margin: 0;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
 }
 
-.status-actions {
-    display: flex;
-    gap: 16px;
-    margin-top: 16px;
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  padding: var(--sp-2) var(--sp-4);
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
 }
 
-.btn-parse-lg {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    background: transparent;
-    border: 1.5px solid rgba(99, 102, 241, 0.5);
-    border-radius: 8px;
-    color: #a5b4fc;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.retry-btn:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent);
 }
 
-.btn-parse-lg:hover:not(:disabled) {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: rgba(99, 102, 241, 0.8);
-    color: #c7d2fe;
+.md-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
 }
 
-.btn-parse-lg:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-secondary-lg {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    background: transparent;
-    border: 1.5px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-secondary-lg:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.status-warning {
-    margin: 8px 0 0 0;
-    font-size: 12px;
-    color: #fbbf24;
-}
-
-/* ========================================
-   Markdown Panel
-   ======================================== */
-
-.markdown-panel {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-.markdown-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+.md-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1-5) var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .toolbar-tabs {
-    display: flex;
-    gap: 2px;
+  display: flex;
+  gap: 2px;
+  background: var(--surface-input);
+  padding: 2px;
+  border-radius: var(--radius-sm);
 }
 
-.toolbar-btn {
-    padding: 6px 14px;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
+.tab-btn {
+  padding: var(--sp-1) var(--sp-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
 }
 
-.toolbar-btn:hover {
-    color: rgba(255, 255, 255, 0.7);
+.tab-btn:hover { color: var(--text-secondary); }
+
+.tab-btn.active {
+  background: var(--surface-elevated);
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-sm);
 }
 
-.toolbar-btn.active {
-    background: rgba(99, 102, 241, 0.15);
-    color: #a5b4fc;
+.toolbar-right {
+  display: flex;
+  gap: var(--sp-1);
 }
 
-.btn-reparse {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: none;
-    border-radius: 4px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
+.toolbar-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
 }
 
-.btn-reparse:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
+.toolbar-icon-btn:hover:not(:disabled) {
+  background: var(--surface-card-hover);
+  color: var(--accent);
 }
 
-.btn-reparse:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.toolbar-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.editor-wrapper {
-    flex: 1;
-    min-height: 0;
+.editor-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .md-editor {
-    width: 100%;
-    height: 100%;
-    padding: 16px;
-    background: transparent;
-    border: none;
-    color: #e0e0e0;
-    font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    resize: none;
-    outline: none;
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-4);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
 }
 
-.md-editor::placeholder {
-    color: rgba(255, 255, 255, 0.25);
-}
+.md-editor::placeholder { color: var(--text-muted); }
 
 .md-preview {
-    flex: 1;
-    padding: 16px;
-    overflow-y: auto;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #e0e0e0;
-}
-
-.md-preview :deep(h1),
-.md-preview :deep(h2),
-.md-preview :deep(h3) {
-    margin: 1em 0 0.5em 0;
-    color: #fff;
-}
-
-.md-preview :deep(h1) {
-    font-size: 1.4em;
-}
-
-.md-preview :deep(h2) {
-    font-size: 1.2em;
-}
-
-.md-preview :deep(h3) {
-    font-size: 1.1em;
-}
-
-.md-preview :deep(p) {
-    margin: 0.5em 0;
-}
-
-.md-preview :deep(ul),
-.md-preview :deep(ol) {
-    padding-left: 1.5em;
-    margin: 0.5em 0;
-}
-
-.md-preview :deep(code) {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-.md-preview :deep(pre) {
-    background: rgba(0, 0, 0, 0.3);
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-}
-
-.md-preview :deep(blockquote) {
-    border-left: 3px solid #6366f1;
-    padding-left: 12px;
-    margin: 0.5em 0;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* ========================================
-   Dialog
-   ======================================== */
-
-.dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-
-.dialog-box {
-    background: #2a2a35;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 320px;
-    text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
-.dialog-icon {
-    font-size: 40px;
-    margin-bottom: 12px;
-}
-
-.dialog-box h4 {
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    color: #fff;
-}
-
-.dialog-box p {
-    margin: 0 0 20px 0;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-}
-
-.dialog-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-}
-
-.btn-cancel,
-.btn-confirm {
-    padding: 8px 20px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-cancel {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
-}
-
-.btn-cancel:hover {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.btn-confirm {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: none;
-    color: #fff;
-}
-
-.btn-confirm:hover {
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
-}
-
-/* ========================================
-   Utilities
-   ======================================== */
-
-.spin {
-    display: inline-block;
-    animation: spin 1s linear infinite;
-}
-
-.spin.large {
-    font-size: 32px;
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
+  flex: 1;
+  padding: var(--sp-4);
+  overflow-y: auto;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 </style>

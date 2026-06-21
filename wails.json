@@ -7,12 +7,12 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "info": {
-    "companyName": "OpenSource Media Foundation",
-    "productName": "GS Video Renderer",
-    "productVersion": "1.2.4.0",
-    "copyright": "Copyright © 2024 OpenSource Media. All rights reserved.",
-    "comments": "High performance media rendering utility",
-    "fileVersion": "1.2.4.0",
-    "fileDescription": "Media Codec Helper"
+    "companyName": "Q-Solver Open Source",
+    "productName": "Q-Solver",
+    "productVersion": "1.0.3.0",
+    "copyright": "Copyright 2026 Q-Solver contributors.",
+    "comments": "Desktop AI assistant for screenshot-based problem solving",
+    "fileVersion": "1.0.3.0",
+    "fileDescription": "Q-Solver Desktop Application"
   }
 }

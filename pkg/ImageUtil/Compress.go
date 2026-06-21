@@ -8,17 +8,22 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-// CompressForOCR 接收原始图片，返回压缩后的 JPEG 字节流
+// ScreenshotMaxDimension 笔试模式截图固定最大边长（长边限制），统一压缩以节省 token
+const ScreenshotMaxDimension = 1280
+
+// CompressForOCR 接收原始图片，返回压缩后的 JPEG 字节流（分辨率固定压缩到 ScreenshotMaxDimension）
 func CompressForOCR(originalImg image.Image, quality int, sharpen float64, Grayscale bool) ([]byte, error) {
+	return CompressForOCRWithMaxSize(originalImg, quality, sharpen, Grayscale, ScreenshotMaxDimension)
+}
+
+// CompressForOCRWithMaxSize 接收原始图片，返回压缩后的 JPEG 字节流，支持自定义最大尺寸
+func CompressForOCRWithMaxSize(originalImg image.Image, quality int, sharpen float64, Grayscale bool, maxDimension int) ([]byte, error) {
 	// 1. 获取原始尺寸
 	bounds := originalImg.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
 	// 2. 调整大小 (Resize)
-	// 策略：如果长边超过 2000px，就等比例缩小到 2000px
-	// 2000px 对于绝大多数 OCR 场景已经足够清晰，且能显著减少 Token 消耗
-	maxDimension := 2000
 	var processedImg image.Image = originalImg
 
 	if width > maxDimension || height > maxDimension {

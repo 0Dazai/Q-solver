@@ -1,6 +1,8 @@
 package main
 
 import (
+	application "Q-Solver/app"
+	"Q-Solver/pkg/common"
 	"embed"
 	"os"
 	"runtime"
@@ -21,7 +23,7 @@ func main() {
 		os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", "--disable-gpu")
 	}
 
-	app := NewApp()
+	app := application.NewApp()
 	err := wails.Run(&options.App{
 		Title:     "",
 		Width:     1024,
@@ -49,13 +51,19 @@ func main() {
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHidden(),
 			WebviewIsTransparent: true,
-			WindowIsTranslucent:  false, // 禁用系统毛玻璃效果，避免白色遮罩
+			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
-				Title:   "Q-Solver",
-				Message: "AI 笔试助手",
+				Title:   common.AppName,
+				Message: "",
 			},
 		},
 		OnShutdown: app.OnShutdown,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "6c201f7f-17c8-4029-8000-2f9035fea412",
+			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
+				app.Show()
+			},
+		},
 	})
 
 	if err != nil {

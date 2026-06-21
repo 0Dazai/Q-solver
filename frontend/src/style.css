@@ -348,11 +348,87 @@ body {
     flex-direction: column;
     gap: var(--space-2);
     pointer-events: auto;
-    overflow-y: auto;
+    overflow-y: hidden;
+    /* Changed from auto to hidden, content handles scroll */
     overflow-x: hidden;
     padding-right: var(--space-2);
+    transition: width var(--transition-base), min-width var(--transition-base), padding var(--transition-base);
+}
+
+.left-panel.collapsed {
+    width: 40px;
+    min-width: 40px;
+    padding-right: 0;
+    align-items: center;
+}
+
+.left-panel .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px;
+    min-height: 32px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.left-panel.collapsed .panel-header {
+    justify-content: center;
+    padding: 4px 0;
+}
+
+.left-panel .panel-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-left: 4px;
+}
+
+.left-panel .toggle-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 1;
+}
+
+.left-panel .toggle-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.history-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     scrollbar-width: thin;
     scrollbar-color: var(--border-default) transparent;
+}
+
+.history-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.history-content::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: var(--radius-full);
 }
 
 .left-panel::-webkit-scrollbar {
@@ -569,8 +645,8 @@ body {
 .markdown-body {
     flex: 1;
     overflow-y: auto;
-    font-size: var(--text-base);
-    line-height: 1.7;
+    font-size: 14px;
+    line-height: 1.6;
     color: var(--text-primary);
     font-weight: 400;
     scrollbar-width: thin;
@@ -657,7 +733,7 @@ body {
     background: linear-gradient(180deg, #1a1b26 0%, #16161e 100%);
     border-radius: var(--radius-md);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    margin: var(--space-4) 0;
+    margin: var(--space-3) 0;
     padding: 0;
     box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     position: relative;
@@ -668,18 +744,18 @@ body {
 .markdown-body pre::before {
     content: '';
     display: block;
-    height: 32px;
+    height: 24px;
     background: rgba(255, 255, 255, 0.03);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .markdown-body pre code {
     display: block;
-    padding: var(--space-4);
+    padding: var(--space-3);
     color: #e4e4e7;
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    line-height: 1.7;
+    font-size: 12px;
+    line-height: 1.5;
     background: transparent !important;
     overflow-x: auto;
     white-space: pre;
@@ -691,10 +767,10 @@ body {
 .markdown-body code:not(pre code) {
     font-family: var(--font-mono);
     background: rgba(16, 185, 129, 0.12);
-    padding: 2px var(--space-2);
+    padding: 1px var(--space-1);
     border-radius: var(--radius-sm);
     color: var(--color-primary);
-    font-size: 0.9em;
+    font-size: 0.85em;
     border: 1px solid rgba(16, 185, 129, 0.2);
     font-weight: 500;
 }
@@ -1199,42 +1275,6 @@ body {
 }
 
 /* ========================================
-   Login Form
-   ======================================== */
-
-.login-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-5);
-    background: var(--bg-card);
-    border-radius: var(--radius-md);
-}
-
-.login-form h3 {
-    margin: 0 0 var(--space-4) 0;
-    color: var(--text-primary);
-    text-align: center;
-}
-
-.account-info {
-    padding: var(--space-5);
-    text-align: center;
-}
-
-.success-msg {
-    color: var(--color-success);
-    font-weight: 600;
-}
-
-.error-msg {
-    color: var(--color-error);
-    font-size: var(--text-sm);
-    margin-top: var(--space-3);
-    text-align: center;
-}
-
-/* ========================================
    Custom Select Component
    ======================================== */
 
@@ -1415,59 +1455,28 @@ body {
     color: var(--color-primary);
 }
 
-/* ========================================
-   Account Tab Styles
-   ======================================== */
 
-.account-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: var(--space-5);
-    border: 1px solid var(--border-subtle);
-}
-
-.account-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-}
-
-.account-icon {
-    font-size: 24px;
-}
-
-.account-title {
-    font-size: var(--text-xl);
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.account-desc {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    line-height: 1.6;
-    margin-bottom: var(--space-5);
-    padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-.account-info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) 0;
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-.account-info-label {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-}
-
-.account-info-value {
-    color: var(--color-primary);
-    font-weight: bold;
+/* KaTeX 公式样式 */
+.katex-error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
     font-family: var(--font-mono);
-    font-size: var(--text-base);
+    font-size: 0.9em;
+}
+
+.markdown-body .katex-display {
+    margin: 16px 0;
+    overflow-x: auto;
+}
+
+.markdown-body .katex {
+    font-size: 1.1em;
+}
+
+/* 流式输出增量渲染：未完成部分样式 */
+.streaming-tail {
+    color: var(--text-secondary);
+    opacity: 0.7;
 }

@@ -2,6 +2,7 @@ package solution
 
 import (
 	"Q-Solver/pkg/config"
+	"Q-Solver/pkg/domain"
 	"Q-Solver/pkg/llm"
 	"Q-Solver/pkg/logger"
 	"bytes"
@@ -9,19 +10,21 @@ import (
 	"errors"
 )
 
+// MaxConversationRounds is the maximum number of conversation rounds to keep.
+const MaxConversationRounds = 10
+
 type Callbacks struct {
 	EmitEvent func(event string, data ...interface{})
 }
 
 type Request struct {
-	Config           config.Config
-	ScreenshotBase64 string
-	ResumeBase64     string
+	Config      config.Config
+	Screenshots []string
 }
 
 type Solver struct {
 	llmProvider llm.Provider
-	chatHistory []llm.Message // 改用统一的 Message 类型
+	chatHistory []llm.Message
 }
 
 func NewSolver(provider llm.Provider) *Solver {
@@ -40,83 +43,80 @@ func (s *Solver) ClearHistory() {
 }
 
 func (s *Solver) Solve(ctx context.Context, req Request, cb Callbacks) bool {
-	// 1. 检查 API Key
 	if req.Config.APIKey == "" {
 		if cb.EmitEvent != nil {
-			cb.EmitEvent("require-login")
+			cb.EmitEvent("require-api-key")
 		}
 		return false
 	}
 
-	logger.Println("开始解题流程...")
+	logger.Println("开始解题流程")
 
-	// 2. 构建 System Prompt
 	var systemPrompt bytes.Buffer
+	systemPrompt.WriteString(domain.GetSystemBehaviorPrompt())
+
+	if req.Config.DomainId != "" {
+		if prompt := domain.GetPrompt(req.Config.DomainId); prompt != "" {
+			systemPrompt.WriteString("\n\n<ScenePrompt>\n")
+			systemPrompt.WriteString(prompt)
+			systemPrompt.WriteString("\n</ScenePrompt>")
+			logger.Printf("已注入场景提示词 (DomainID: %s)", req.Config.DomainId)
+		}
+	}
+
 	if req.Config.Prompt != "" {
+		systemPrompt.WriteString("\n\n<UserExtraInstruction>\n")
 		systemPrompt.WriteString(req.Config.Prompt)
+		systemPrompt.WriteString("\n</UserExtraInstruction>")
 	}
 
-	// 如果使用 Markdown 简历，将简历内容追加到 System Prompt
-	if req.Config.UseMarkdownResume && req.Config.ResumeContent != "" {
+	if req.Config.ResumeContent != "" {
 		logger.Println("使用 Markdown 简历内容")
-		systemPrompt.WriteString("\n\n# 候选人简历内容如下: \n")
+		systemPrompt.WriteString("\n\n<CandidateProfile>\n")
+		systemPrompt.WriteString("  <ResumeSummary>\n")
 		systemPrompt.WriteString(req.Config.ResumeContent)
+		systemPrompt.WriteString("\n  </ResumeSummary>\n")
+		systemPrompt.WriteString("</CandidateProfile>\n")
 	}
 
-	// 3. 构建当前用户消息（包含截图）
-	userParts := []llm.ContentPart{
-		llm.ImagePart(req.ScreenshotBase64),
-	}
+	logger.Println("system 提示词:", systemPrompt.String())
 
-	// 如果使用 PDF 简历，将简历附件加入用户消息
-	if !req.Config.UseMarkdownResume && req.ResumeBase64 != "" {
-		userParts = append(userParts,
-			llm.TextPart("\n\n# 候选人简历已作为附件发送，请参考简历内容回答。"),
-			llm.PDFPart(req.ResumeBase64),
-		)
-		logger.Println("已注入简历附件 (PDF)")
+	userParts := make([]llm.ContentPart, 0, len(req.Screenshots))
+	for _, screenshot := range req.Screenshots {
+		userParts = append(userParts, llm.ImagePart(screenshot))
 	}
-
 	currentUserMsg := llm.NewMultiPartMessage(llm.RoleUser, userParts)
 
-	// 4. 构建最终发送的消息列表
 	var messagesToSend []llm.Message
-
-	if req.Config.KeepContext {
-		// 保持上下文模式：使用并更新历史记录
-		s.ensureSystemPrompt(systemPrompt.String())
-		messagesToSend = append(messagesToSend, s.chatHistory...)
-	} else {
-		// 不保持上下文模式：每次都是全新对话
-		messagesToSend = append(messagesToSend, llm.NewSystemMessage(systemPrompt.String()))
-	}
+	messagesToSend = append(messagesToSend, llm.NewSystemMessage(systemPrompt.String()))
 	messagesToSend = append(messagesToSend, currentUserMsg)
 
-	// 5. 调用 LLM 生成回答
 	if cb.EmitEvent != nil {
 		cb.EmitEvent("solution-stream-start")
 	}
 
 	response, err := s.llmProvider.GenerateContentStream(ctx, messagesToSend, func(chunk llm.StreamChunk) {
-		if cb.EmitEvent != nil {
-			// 根据 chunk 类型发送不同事件
-			switch chunk.Type {
-			case llm.ChunkThinking:
-				cb.EmitEvent("solution-stream-thinking", chunk.Content)
-			case llm.ChunkContent:
-				cb.EmitEvent("solution-stream-chunk", chunk.Content)
-			}
+		if cb.EmitEvent == nil {
+			return
+		}
+
+		switch chunk.Type {
+		case llm.ChunkThinking:
+			cb.EmitEvent("solution-stream-thinking", chunk.Content)
+		case llm.ChunkContent:
+			cb.EmitEvent("solution-stream-chunk", chunk.Content)
 		}
 	})
 
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
-			logger.Println("当前任务已中断 (用户产生新输入)")
+			logger.Println("当前任务已中断（用户产生新输入）")
 			if cb.EmitEvent != nil {
 				cb.EmitEvent("solution-error", "context canceled")
 			}
 			return false
 		}
+
 		logger.Printf("LLM 请求失败: %v\n", err)
 		if cb.EmitEvent != nil {
 			cb.EmitEvent("solution-error", err.Error())
@@ -124,12 +124,10 @@ func (s *Solver) Solve(ctx context.Context, req Request, cb Callbacks) bool {
 		return false
 	}
 
-	// 6. 处理结果
 	logger.Printf("[解题] 模型返回内容长度: %d", len(response.Content))
 	logger.Printf("[解题] 模型返回内容: %s", response.Content)
 	logger.Printf("[解题] 模型返回思考链长度: %d", len(response.Thinking))
 
-	// 检查模型是否返回空内容
 	if response.Content == "" && response.Thinking == "" {
 		logger.Println("[解题] 警告: 模型返回内容为空")
 		if cb.EmitEvent != nil {
@@ -142,19 +140,11 @@ func (s *Solver) Solve(ctx context.Context, req Request, cb Callbacks) bool {
 		cb.EmitEvent("solution", response.Content)
 	}
 
-	if req.Config.KeepContext {
-		// 保持上下文模式：保存完整的用户消息和助手回复到历史
-		s.chatHistory = append(s.chatHistory, currentUserMsg)
-		s.chatHistory = append(s.chatHistory, llm.NewAssistantMessage(response.Content))
-	} else {
-		// 不保持上下文模式：清空历史
-		s.chatHistory = []llm.Message{}
-	}
-
+	s.chatHistory = []llm.Message{}
 	return true
 }
 
-// ensureSystemPrompt 确保 chatHistory 的第一条是正确的 System Prompt
+// ensureSystemPrompt keeps the first history message aligned with the active system prompt.
 func (s *Solver) ensureSystemPrompt(prompt string) {
 	if len(s.chatHistory) == 0 {
 		s.chatHistory = append(s.chatHistory, llm.NewSystemMessage(prompt))
@@ -162,15 +152,36 @@ func (s *Solver) ensureSystemPrompt(prompt string) {
 		return
 	}
 
-	// 检查第一条是否为系统消息
 	if s.chatHistory[0].Role == llm.RoleSystem {
 		if s.chatHistory[0].Content != prompt {
 			s.chatHistory[0] = llm.NewSystemMessage(prompt)
 			logger.Println("替换 SystemPrompt")
 		}
-	} else {
-		// 第一条不是系统消息，插入到头部
-		s.chatHistory = append([]llm.Message{llm.NewSystemMessage(prompt)}, s.chatHistory...)
-		logger.Println("插入 SystemPrompt 到消息历史头部")
+		return
 	}
+
+	s.chatHistory = append([]llm.Message{llm.NewSystemMessage(prompt)}, s.chatHistory...)
+	logger.Println("插入 SystemPrompt 到消息历史头部")
+}
+
+// trimChatHistory keeps only the most recent conversation rounds.
+func (s *Solver) trimChatHistory() {
+	if len(s.chatHistory) <= 1 {
+		return
+	}
+
+	nonSystemMsgs := len(s.chatHistory) - 1
+	maxNonSystemMsgs := MaxConversationRounds * 2
+	if nonSystemMsgs <= maxNonSystemMsgs {
+		return
+	}
+
+	startIndex := len(s.chatHistory) - maxNonSystemMsgs
+	newHistory := make([]llm.Message, 0, maxNonSystemMsgs+1)
+	newHistory = append(newHistory, s.chatHistory[0])
+	newHistory = append(newHistory, s.chatHistory[startIndex:]...)
+
+	oldLen := len(s.chatHistory)
+	s.chatHistory = newHistory
+	logger.Printf("裁剪对话历史: %d -> %d 条消息 (保留最近 %d 轮对话)", oldLen, len(s.chatHistory), MaxConversationRounds)
 }

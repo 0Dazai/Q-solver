@@ -11,7 +11,8 @@ export const PROVIDERS = {
     zhipu: { name: 'Zhipu AI', aliases: ['z-ai', 'bigmodel', 'chatglm', 'thmffu'] },
     moonshot: { name: 'Moonshot AI', aliases: ['moonshotai', 'kimi'] },
     alibaba: { name: 'Alibaba Cloud', aliases: ['qwen'] },
-    bytedance: { name: 'ByteDance', aliases: ['volcengine', 'doubao', 'byte-dance'] },
+    bytedance: { name: 'ByteDance', aliases: ['byte-dance'] },
+    doubao: { name: '豆包/火山方舟', aliases: ['volcengine', 'ark'] },
     '01-ai': { name: '01.AI', aliases: ['01ai', 'yi', 'zeroone'] },
     mistral: { name: 'Mistral AI', aliases: ['mistralai', 'mistral-ai'] },
     cohere: { name: 'Cohere' },
@@ -41,14 +42,31 @@ const DEFAULT_LOGO_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000
 </svg>`
 
 export const PROVIDER_BASE_URLS = {
-    google: 'https://generativelanguage.googleapis.com',
+    // Gemini OpenAI compatibility endpoint
+    google: 'https://generativelanguage.googleapis.com/v1beta/openai',
     openai: 'https://api.openai.com/v1',
-    anthropic: 'https://api.anthropic.com',
+    // Anthropic OpenAI SDK compatibility endpoint
+    anthropic: 'https://api.anthropic.com/v1',
+    // DeepSeek supports OpenAI-compatible access; /v1 is the drop-in form
+    deepseek: 'https://api.deepseek.com/v1',
+    doubao: 'https://ark.cn-beijing.volces.com/api/v3',
     alibaba: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     moonshot: 'https://api.moonshot.cn/v1',
     openrouter: 'https://openrouter.ai/api/v1',
     custom: ''
 }
+
+export const FEATURED_PROVIDER_CODES = [
+    'openai',
+    'google',
+    'anthropic',
+    'deepseek',
+    'doubao',
+    'alibaba',
+    'moonshot',
+    'openrouter',
+    'custom',
+]
 
 // 默认能力
 const defaultCapabilities = {
@@ -183,6 +201,7 @@ const ICON_FILENAME_MAP = {
     'google': 'gemini-color',
     'deepseek': 'deepseek-color',
     'bytedance': 'bytedance-color',
+    'doubao': 'doubao-color',
     'cohere': 'cohere-color',
     'perplexity': 'perplexity-color',
     'nvidia': 'nvidia-color',
@@ -265,19 +284,25 @@ const ICON_FILENAME_MAP = {
 export function getProviderLogo(model) {
     const providerCode = getProviderCode(model)
 
-    if (providerCode === 'unknown' || providerCode === 'custom') {
+    return getProviderLogoByCode(providerCode)
+}
+
+export function getProviderLogoByCode(providerCode) {
+    const normalizedProviderCode = normalizeProviderCode(providerCode)
+
+    if (normalizedProviderCode === 'unknown' || normalizedProviderCode === 'custom') {
         return DEFAULT_LOGO_SVG
     }
 
     // O(1) 查映射表
-    const iconName = ICON_FILENAME_MAP[providerCode]
+    const iconName = ICON_FILENAME_MAP[normalizedProviderCode]
     if (iconName !== undefined) {
         // null 表示没有专用图标，使用默认图标
         return iconName === null ? DEFAULT_LOGO_SVG : `/icons/${iconName}.svg`
     }
 
     // 没在映射表中，直接用 provider code 作为文件名
-    return `/icons/${providerCode}.svg`
+    return `/icons/${normalizedProviderCode}.svg`
 }
 
 /**
@@ -285,6 +310,29 @@ export function getProviderLogo(model) {
  */
 export function getDefaultLogoSvg() {
     return DEFAULT_LOGO_SVG
+}
+
+export function guessProviderFromBaseURL(baseURL) {
+    const normalizedURL = (baseURL || '').trim().toLowerCase()
+    if (!normalizedURL) return 'openai'
+
+    for (const [providerCode, providerBaseURL] of Object.entries(PROVIDER_BASE_URLS)) {
+        if (!providerBaseURL) continue
+        if (normalizedURL === providerBaseURL.toLowerCase()) {
+            return providerCode
+        }
+    }
+
+    if (normalizedURL.includes('openrouter.ai')) return 'openrouter'
+    if (normalizedURL.includes('openai.com')) return 'openai'
+    if (normalizedURL.includes('anthropic.com')) return 'anthropic'
+    if (normalizedURL.includes('googleapis.com') || normalizedURL.includes('google.com')) return 'google'
+    if (normalizedURL.includes('deepseek.com')) return 'deepseek'
+    if (normalizedURL.includes('ark.cn-beijing.volces.com') || normalizedURL.includes('volces.com')) return 'doubao'
+    if (normalizedURL.includes('moonshot.cn')) return 'moonshot'
+    if (normalizedURL.includes('aliyuncs.com') || normalizedURL.includes('dashscope')) return 'alibaba'
+
+    return 'custom'
 }
 
 /**

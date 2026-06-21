@@ -59,8 +59,15 @@ void SetWindowStyleMaskBorderlessC(void* nsWindow) {
     if (nsWindow == NULL) return;
     NSWindow* window = (__bridge NSWindow*)nsWindow;
     dispatch_async(dispatch_get_main_queue(), ^{
-        // 无边框样式
-        [window setStyleMask:NSWindowStyleMaskBorderless];
+        // 保留 titled 样式以维持输入法上下文（IMK），同时隐藏标题栏
+        [window setStyleMask:(NSWindowStyleMaskTitled |
+                              NSWindowStyleMaskFullSizeContentView)];
+        [window setTitlebarAppearsTransparent:YES];
+        [window setTitleVisibility:NSWindowTitleHidden];
+        // 隐藏标题栏按钮
+        [[window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+        [[window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+        [[window standardWindowButton:NSWindowZoomButton] setHidden:YES];
         // 透明背景
         [window setBackgroundColor:[NSColor clearColor]];
         [window setOpaque:NO];
@@ -86,9 +93,9 @@ void SetWindowNotActivatingC(void* nsWindow, bool noActivate) {
     NSWindow* window = (__bridge NSWindow*)nsWindow;
     dispatch_async(dispatch_get_main_queue(), ^{
         if (noActivate) {
-            [window setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
-                                           NSWindowCollectionBehaviorStationary |
-                                           NSWindowCollectionBehaviorIgnoresCycle];
+            // 只设置 CanJoinAllSpaces，不设置 Stationary/IgnoresCycle
+            // Stationary 会导致窗口点击后无法成为 key window，从而无法拖动
+            [window setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces];
         } else {
             [window setCollectionBehavior:NSWindowCollectionBehaviorDefault];
         }
@@ -101,6 +108,15 @@ void SetWindowCanBecomeKeyC(void* nsWindow) {
     NSWindow* window = (__bridge NSWindow*)nsWindow;
     dispatch_async(dispatch_get_main_queue(), ^{
         [window makeKeyAndOrderFront:nil];
+    });
+}
+
+// 设置窗口接受鼠标事件时自动成为 key window
+void SetWindowAcceptsMouseMovedC(void* nsWindow) {
+    if (nsWindow == NULL) return;
+    NSWindow* window = (__bridge NSWindow*)nsWindow;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [window setAcceptsMouseMovedEvents:YES];
     });
 }
 
@@ -228,6 +244,9 @@ func ApplyGhostMode(hwnd WindowHandle) error {
 
 	// 不抢焦点
 	C.SetWindowNotActivatingC(window, C.bool(true))
+
+	// 允许窗口在点击时自动接收鼠标事件（修复失焦后无法拖动的问题）
+	C.SetWindowAcceptsMouseMovedC(window)
 
 	logger.Println("[macOS] 幽灵模式已激活")
 	return nil

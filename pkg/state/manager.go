@@ -25,6 +25,7 @@ type WindowState struct {
 	Visible      bool
 	ClickThrough bool
 	StealthMode  bool
+	Hidden       bool
 }
 
 // StateManager 管理应用全局状态
@@ -62,7 +63,7 @@ func (sm *StateManager) Startup(ctx context.Context, emitEvent func(string, ...i
 	sm.emitEvent = emitEvent
 
 	// 异步初始化窗口句柄
-	go sm.initWindowHandle()
+	sm.initWindowHandle()
 }
 
 // initWindowHandle 初始化窗口句柄
@@ -212,6 +213,43 @@ func (sm *StateManager) ToggleClickThrough() bool {
 	}
 
 	return newState
+}
+
+func (sm *StateManager) ToggleWindowHidden() bool {
+	sm.windowMu.Lock()
+	defer sm.windowMu.Unlock()
+
+	if sm.ctx == nil {
+		return sm.windowState.Hidden
+	}
+
+	if runtime.WindowIsMinimised(sm.ctx) || sm.windowState.Hidden {
+		runtime.WindowUnminimise(sm.ctx)
+		runtime.WindowShow(sm.ctx)
+		sm.windowState.Hidden = false
+	} else {
+		runtime.WindowMinimise(sm.ctx)
+		sm.windowState.Hidden = true
+	}
+
+	if sm.emitEvent != nil {
+		sm.emitEvent("window-hidden-state", sm.windowState.Hidden)
+	}
+
+	return sm.windowState.Hidden
+}
+
+func (sm *StateManager) ShowWindow() {
+	sm.windowMu.Lock()
+	defer sm.windowMu.Unlock()
+
+	if sm.ctx == nil {
+		return
+	}
+
+	runtime.WindowUnminimise(sm.ctx)
+	runtime.WindowShow(sm.ctx)
+	sm.windowState.Hidden = false
 }
 
 // RestoreFocus 恢复焦点

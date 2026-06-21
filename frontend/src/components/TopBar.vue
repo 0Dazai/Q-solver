@@ -1,137 +1,113 @@
 <template>
-  <div class="top-bar-wrapper" style="--wails-draggable:drag">
+  <div class="top-bar-wrapper" style="--wails-draggable: drag">
     <div class="top-bar">
-      <div class="control-group" :class="{ active: activeButtons.toggle }" style="--wails-draggable:no-drag">
-        <span class="key-hint">{{ shortcuts.toggle?.keyName || (isMacOS ? '⌘2' : 'F9') }}</span>
-        <span class="label">隐藏/展示</span>
+      <div class="bar-left" style="--wails-draggable: no-drag">
+        <div class="logo">Q</div>
+        <div class="scene-pill">
+          <Icon name="camera" :size="14" />
+          <span>截图解题</span>
+        </div>
       </div>
-      <div class="control-group" :class="{ active: activeButtons.solve }" style="--wails-draggable:no-drag">
-        <span class="key-hint">{{ shortcuts.solve?.keyName || (isMacOS ? '⌘1' : 'F8') }}</span>
-        <span class="label">一键解题</span>
-      </div>
-      <div class="control-group" :class="{ active: activeButtons.clickthrough || isClickThrough }" style="--wails-draggable:no-drag">
-        <span class="key-hint">{{ shortcuts.clickthrough?.keyName || (isMacOS ? '⌘3' : 'F10') }}</span>
-        <span class="label">鼠标穿透</span>
-      </div>
-      <div class="control-group" style="cursor: default;">
-        <span class="key-hint">{{ isMacOS ? '⌘⌥+Move' : 'Alt+Move' }}</span>
-        <span class="label">移动/滚动</span>
-      </div>
-      <div class="divider"></div>
-      <div class="control-group" @click="$emit('openSettings')" style="cursor: pointer; --wails-draggable:no-drag"
-        @mouseenter="showSettingsTooltip" @mouseleave="hideSettingsTooltip" ref="settingsBtnRef">
-        <span class="label">⚙️ 设置</span>
-      </div>
-      <div class="divider"></div>
-      <div class="status-group" ref="statusGroupRef" @click="toggleStatusPanel" style="--wails-draggable:no-drag">
-        <span class="status-dot" :class="statusClass"></span>
-        <span class="status-label">状态</span>
-      </div>
-      <div class="divider"></div>
-      <div class="control-group" style="cursor: pointer; --wails-draggable:no-drag" @click="$emit('quit')">
-        <span class="label">❌ 退出</span>
+
+      <div class="bar-right" style="--wails-draggable: no-drag">
+        <div class="shortcuts-hint">
+          <kbd>{{ settingsStore.solveShortcut }}</kbd>
+          <kbd>{{ settingsStore.sendShortcut }}</kbd>
+          <kbd>{{ settingsStore.toggleShortcut }}</kbd>
+        </div>
+
+        <div class="bar-divider" />
+
+        <button class="bar-btn" ref="statusBtnRef" @click="toggleStatusPanel" :title="'状态: ' + settingsStore.statusText">
+          <span class="status-dot" :class="statusClass"></span>
+        </button>
+
+        <div class="bar-divider" />
+
+        <ThemeToggle />
+
+        <button class="bar-btn" @click="$emit('openSettings')" title="设置"
+          @mouseenter="showSettingsTooltip" @mouseleave="showSettingsTip = false" ref="settingsBtnRef">
+          <Icon name="settings" :size="15" />
+        </button>
+
+        <button class="bar-btn" @click="minimizeWindow" :title="`收起窗口，按 ${settingsStore.minimizeShortcut} 恢复`">
+          <Icon name="minus" :size="15" />
+        </button>
+
+        <button class="bar-btn bar-btn-quit" @click="ui.quit" title="退出">
+          <Icon name="power" :size="15" />
+        </button>
       </div>
     </div>
   </div>
 
   <Teleport to="body">
-    <!-- 状态面板 - 点击显示 -->
     <Transition name="panel-fade">
       <div class="status-panel" v-if="showStatusPanel" :style="panelStyle" @click.stop>
-        <div class="panel-header">
-          <span class="panel-title">运行状态</span>
-          <button class="panel-close" @click="showStatusPanel = false">✕</button>
+        <div class="sp-header">
+          <span class="sp-title">运行状态</span>
+          <button class="sp-close" @click="showStatusPanel = false">
+            <Icon name="x" :size="14" />
+          </button>
         </div>
-        <div class="panel-body">
-          <div class="status-row">
-            <span class="row-label">当前状态</span>
-            <span class="row-value" :class="statusValueClass">{{ statusText }}</span>
-          </div>
-          <div class="status-row">
-            <span class="row-label">API 连接</span>
-            <span class="row-value" :class="apiStatusClass">
-              {{ apiStatusText }}
+        <div class="sp-body">
+          <div class="sp-row">
+            <span class="sp-label">API Key</span>
+            <span class="sp-value" :class="settingsStore.settings.apiKey ? 'ok' : 'warn'">
+              {{ settingsStore.settings.apiKey ? '已配置' : '未配置' }}
             </span>
           </div>
-          <div class="status-row">
-            <span class="row-label">使用模型</span>
-            <span class="row-value model">{{ settings.model || '未设置' }}</span>
+          <div class="sp-row">
+            <span class="sp-label">Base URL</span>
+            <span class="sp-value model">{{ settingsStore.settings.baseURL || 'https://api.openai.com/v1' }}</span>
           </div>
-          <div class="status-row">
-            <span class="row-label">隐身模式</span>
-            <span class="row-value" :class="isStealthMode ? 'success' : 'error'">
-              {{ isStealthMode ? '已开启' : '已关闭' }}
-            </span>
+          <div class="sp-row">
+            <span class="sp-label">使用模型</span>
+            <span class="sp-value model">{{ settingsStore.settings.model || '未设置' }}</span>
+          </div>
+          <div class="sp-row">
+            <span class="sp-label">隐身模式</span>
+            <span class="sp-value" :class="ui.isStealthMode ? 'ok' : 'err'">{{ ui.isStealthMode ? '已开启' : '已关闭' }}</span>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- 设置按钮 tooltip -->
     <div class="settings-tooltip" v-if="showSettingsTip" :style="settingsTooltipStyle">
-      <div class="tooltip-warning">
-        ⚠️ 注意：打开设置将获取焦点<br>录屏期间请勿操作
-      </div>
+      <Icon name="alert-triangle" :size="13" class="tooltip-icon" />
+      <span>打开设置会获取焦点，录屏期间请避免操作</span>
     </div>
   </Teleport>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useUIStore } from '../stores/ui'
+import { useSettingsStore } from '../stores/settings'
+import Icon from './Icon.vue'
+import ThemeToggle from './ThemeToggle.vue'
 
-const props = defineProps({
-  shortcuts: Object,
-  activeButtons: Object,
-  isClickThrough: Boolean,
-  statusIcon: String,
-  statusText: String,
+defineEmits(['openSettings'])
 
-  settings: Object,
-  isStealthMode: Boolean,
-  isMacOS: Boolean
-})
+const ui = useUIStore()
+const settingsStore = useSettingsStore()
 
-defineEmits(['openSettings', 'quit'])
+function minimizeWindow() {
+  ui.toggleMinimizeWindow()
+}
 
-// 根据状态文本计算状态类名
 const statusClass = computed(() => {
-  const text = props.statusText || ''
-  if (text === '已连接' || text === '就绪' || text === '解题完成') return 'connected'
+  const text = settingsStore.statusText || ''
+  if (text === '已连接' || text === '就绪' || text === '解题完成' || text.includes('思考') || text.includes('复制')) return 'connected'
   if (text.includes('未配置')) return 'unconfigured'
   if (text.includes('无效') || text.includes('Key')) return 'invalid-key'
   if (text.includes('失败') || text.includes('出错')) return 'disconnected'
-  if (text.includes('思考') || text.includes('复制')) return 'connected'
   return 'unconfigured'
 })
 
-// 状态值样式
-const statusValueClass = computed(() => {
-  const text = props.statusText || ''
-  if (text === '已连接' || text === '就绪' || text === '解题完成' || text.includes('思考') || text.includes('复制')) return 'success'
-  if (text.includes('未配置')) return 'warning'
-  return 'error'
-})
-
-// API 状态文本
-const apiStatusText = computed(() => {
-  const text = props.statusText || ''
-  if (text === '已连接' || text === '就绪' || text === '解题完成' || text.includes('思考') || text.includes('复制')) return '连接正常'
-  if (text.includes('Key') || text.includes('无效')) return 'Key 无效'
-  if (text.includes('失败')) return '连接失败'
-  return '未配置'
-})
-
-// API 状态样式
-const apiStatusClass = computed(() => {
-  const text = props.statusText || ''
-  if (text === '已连接' || text === '就绪' || text === '解题完成' || text.includes('思考') || text.includes('复制')) return 'success'
-  if (text.includes('未配置')) return 'warning'
-  return 'error'
-})
-
-// 状态面板
 const showStatusPanel = ref(false)
-const statusGroupRef = ref(null)
+const statusBtnRef = ref(null)
 const panelStyle = reactive({ top: '0px', left: '0px' })
 
 function toggleStatusPanel() {
@@ -139,25 +115,20 @@ function toggleStatusPanel() {
     showStatusPanel.value = false
     return
   }
-  
-  if (statusGroupRef.value) {
-    const rect = statusGroupRef.value.getBoundingClientRect()
+  if (statusBtnRef.value) {
+    const rect = statusBtnRef.value.getBoundingClientRect()
     panelStyle.top = `${rect.bottom + 8}px`
-    // 确保面板不会超出右边界
-    const panelWidth = 220
-    let left = rect.left + rect.width / 2 - panelWidth / 2
-    if (left + panelWidth > window.innerWidth - 10) {
-      left = window.innerWidth - panelWidth - 10
-    }
+    const pw = 280
+    let left = rect.left + rect.width / 2 - pw / 2
+    if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10
     if (left < 10) left = 10
     panelStyle.left = `${left}px`
     showStatusPanel.value = true
   }
 }
 
-// 点击外部关闭面板
 function handleClickOutside(e) {
-  if (showStatusPanel.value && statusGroupRef.value && !statusGroupRef.value.contains(e.target)) {
+  if (showStatusPanel.value && statusBtnRef.value && !statusBtnRef.value.contains(e.target)) {
     showStatusPanel.value = false
   }
 }
@@ -170,7 +141,6 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 
-// 设置按钮 tooltip
 const showSettingsTip = ref(false)
 const settingsBtnRef = ref(null)
 const settingsTooltipStyle = reactive({ top: '0px', left: '0px' })
@@ -179,230 +149,237 @@ function showSettingsTooltip() {
   if (settingsBtnRef.value) {
     const rect = settingsBtnRef.value.getBoundingClientRect()
     settingsTooltipStyle.top = `${rect.bottom + 10}px`
-    settingsTooltipStyle.left = `${rect.left + rect.width / 2}px`
+    const tooltipW = 310
+    const halfW = tooltipW / 2
+    let centerX = rect.left + rect.width / 2
+    if (centerX + halfW > window.innerWidth - 8) {
+      centerX = window.innerWidth - 8 - halfW
+    }
+    if (centerX - halfW < 8) {
+      centerX = 8 + halfW
+    }
+    settingsTooltipStyle.left = `${centerX}px`
     showSettingsTip.value = true
   }
-}
-
-function hideSettingsTooltip() {
-  showSettingsTip.value = false
 }
 </script>
 
 <style scoped>
-/* ========================================
-   TopBar Styles
-   ======================================== */
-
 .top-bar-wrapper {
+  align-self: center;
+  padding: 44px var(--sp-4) var(--sp-2);
   pointer-events: auto;
-}
-
-/* ========================================
-   Status Group - 简洁文本样式
-   ======================================== */
-
-.status-group {
-  position: relative;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  justify-content: center;
+  margin-top: calc(-1 * var(--sp-3));
+  user-select: none;
+  width: 100%;
+  position: relative;
+  z-index: 50;
 }
-
-.status-group:hover {
-  background: var(--bg-hover);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: all var(--transition-fast);
-}
-
-.status-dot.connected {
-  background: var(--color-success);
-  box-shadow: 0 0 8px var(--color-success);
-}
-
-.status-dot.unconfigured {
-  background: var(--color-warning);
-  box-shadow: 0 0 8px var(--color-warning);
-}
-
-.status-dot.invalid-key,
-.status-dot.disconnected {
-  background: var(--color-error);
-  box-shadow: 0 0 8px var(--color-error);
-}
-
-.status-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-/* ========================================
-   Status Panel - 点击弹出面板
-   ======================================== */
-
-.status-panel {
-  position: fixed;
-  width: 220px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  backdrop-filter: blur(20px);
-  z-index: 99999;
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.panel-header {
+.top-bar {
+  background: var(--surface-elevated);
+  backdrop-filter: blur(24px);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  gap: var(--sp-2);
+  pointer-events: auto;
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--border-subtle);
+  border: 1px solid var(--border-default);
+  transition: border-color var(--duration-base) ease;
+  white-space: nowrap;
+  width: 100%;
+  max-width: 95vw;
 }
-
-.panel-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
+.top-bar:hover { border-color: var(--border-hover); }
+.bar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.logo {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 800;
+  color: white;
+  flex-shrink: 0;
+  letter-spacing: -0.5px;
+}
+.scene-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  background: var(--surface-card);
+  border-radius: var(--radius-full);
+  padding: var(--sp-1) var(--sp-2-5);
   color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
 }
-
-.panel-close {
-  width: 20px;
-  height: 20px;
+.bar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.shortcuts-hint {
+  display: flex;
+  gap: var(--sp-1);
+  align-items: center;
+}
+.shortcuts-hint kbd {
+  padding: 2px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  line-height: 1;
+}
+.bar-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-default);
+  margin: 0 var(--sp-1);
+  flex-shrink: 0;
+}
+.bar-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
-  transition: all var(--transition-fast);
+  transition: all var(--duration-fast) ease;
+  flex-shrink: 0;
 }
-
-.panel-close:hover {
-  background: var(--bg-hover);
+.bar-btn:hover {
+  background: var(--surface-card-hover);
   color: var(--text-primary);
 }
-
-.panel-body {
-  padding: 10px 14px;
+.bar-btn-quit:hover { color: var(--color-error); }
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) ease;
 }
-
-.status-row {
+.status-dot.connected { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+.status-dot.unconfigured { background: var(--color-warning); box-shadow: 0 0 6px var(--color-warning); }
+.status-dot.invalid-key,
+.status-dot.disconnected { background: var(--color-error); box-shadow: 0 0 6px var(--color-error); }
+.status-panel {
+  position: fixed;
+  width: 280px;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(24px);
+  z-index: var(--z-tooltip);
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: top center;
+}
+.sp-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--border-subtle);
 }
-
-.status-row:last-child {
-  border-bottom: none;
-}
-
-.row-label {
-  font-size: var(--text-xs);
+.sp-title { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--text-primary); }
+.sp-close {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
 }
-
-.row-value {
+.sp-close:hover { background: var(--surface-card-hover); color: var(--text-primary); }
+.sp-body { padding: var(--sp-2) var(--sp-4) var(--sp-3); }
+.sp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sp-row:last-child { border-bottom: none; }
+.sp-label { font-size: var(--text-xs); color: var(--text-muted); }
+.sp-value {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   font-family: var(--font-mono);
-}
-
-.row-value.success {
-  color: var(--color-success);
-}
-
-.row-value.warning {
-  color: var(--color-warning);
-}
-
-.row-value.error {
-  color: var(--color-error);
-}
-
-.row-value.model {
-  color: var(--text-primary);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
 }
-
-/* Panel 过渡动画 */
-.panel-fade-enter-active,
-.panel-fade-leave-active {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.panel-fade-enter-from,
-.panel-fade-leave-to {
+.sp-value.ok { color: var(--color-success); }
+.sp-value.warn { color: var(--color-warning); }
+.sp-value.err { color: var(--color-error); }
+.sp-value.model { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.panel-fade-enter-active { transition: all 0.2s var(--ease-out); }
+.panel-fade-leave-active { transition: all 0.15s ease-in; pointer-events: none; }
+.panel-fade-enter-from, .panel-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-8px) scale(0.96);
 }
-
-/* ========================================
-   Settings Tooltip
-   ======================================== */
-
 .settings-tooltip {
   position: fixed;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, var(--bg-elevated) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: var(--surface-popover);
+  border: 1px solid var(--warning-border);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  z-index: 99999;
-  box-shadow: var(--shadow-lg), 0 0 20px rgba(245, 158, 11, 0.1);
+  padding: var(--sp-2) var(--sp-3);
+  z-index: var(--z-tooltip);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(16px);
   pointer-events: none;
-  animation: tooltipIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  text-align: center;
+  animation: tooltipIn 0.2s var(--ease-out);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  font-size: var(--text-xs);
+  color: var(--color-warning);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  max-width: calc(100vw - 16px);
 }
-
 .settings-tooltip::before {
   content: '';
   position: absolute;
-  top: -6px;
+  top: -5px;
   left: 50%;
   transform: translateX(-50%);
-  border-width: 0 6px 6px 6px;
+  border-width: 0 5px 5px 5px;
   border-style: solid;
-  border-color: transparent transparent rgba(245, 158, 11, 0.4) transparent;
+  border-color: transparent transparent var(--warning-border) transparent;
 }
-
-.tooltip-warning {
-  color: var(--color-warning);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  font-weight: 600;
-}
-
+.tooltip-icon { flex-shrink: 0; }
 @keyframes tooltipIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -6px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
+  from { opacity: 0; transform: translate(-50%, -4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 </style>

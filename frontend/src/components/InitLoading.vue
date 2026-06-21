@@ -6,13 +6,12 @@
         <div class="loader-ring inner"></div>
         <div class="loader-glow"></div>
       </div>
-      
       <div class="text-container">
         <div class="status-text">{{ statusText }}</div>
         <div class="sub-text">
-            <span v-if="status === 'loading-model'">正在初始化神经网络...</span>
-            <span v-else-if="status === 'initializing'">系统启动中...</span>
-            <span v-else>请稍候</span>
+          <span v-if="status === 'loading-model'">正在初始化神经网络...</span>
+          <span v-else-if="status === 'initializing'">系统启动中...</span>
+          <span v-else>请稍候</span>
         </div>
       </div>
     </div>
@@ -23,10 +22,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  status: {
-    type: String,
-    default: 'initializing'
-  }
+  status: { type: String, default: 'initializing' }
 })
 
 const statusText = computed(() => {
@@ -43,15 +39,15 @@ const statusText = computed(() => {
 .init-loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(18, 18, 20, 0.85);
+  background: var(--surface-overlay);
   backdrop-filter: blur(20px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 9999;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--font-sans);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
 }
 
 .loading-content {
@@ -63,8 +59,7 @@ const statusText = computed(() => {
 
 .loader-wrapper {
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 80px; height: 80px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -72,29 +67,26 @@ const statusText = computed(() => {
 
 .loader-ring {
   position: absolute;
-  width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   border-radius: 50%;
   border: 2px solid transparent;
-  border-top-color: var(--color-primary);
-  border-right-color: rgba(16, 185, 129, 0.5);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-glow);
   animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
 }
 
 .loader-ring.inner {
-  width: 70%;
-  height: 70%;
-  border-top-color: #0ea5e9;
+  width: 70%; height: 70%;
+  border-top-color: var(--color-info);
   border-right-color: transparent;
-  border-left-color: rgba(14, 165, 233, 0.5);
+  border-left-color: var(--color-info);
   animation: spin 1.5s cubic-bezier(0.5, 0, 0.5, 1) infinite reverse;
 }
 
 .loader-glow {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+  width: 100%; height: 100%;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -102,21 +94,21 @@ const statusText = computed(() => {
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   animation: fadeInUp 0.6s ease-out;
 }
 
 .status-text {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 700;
   letter-spacing: 3px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   text-transform: uppercase;
 }
 
 .sub-text {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   font-weight: 400;
   letter-spacing: 0.5px;
 }

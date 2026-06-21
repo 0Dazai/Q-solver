@@ -3,95 +3,48 @@ package llm
 import (
 	"context"
 	"fmt"
-	"strings"
+	"sync"
 	"time"
 
 	"Q-Solver/pkg/config"
 	"Q-Solver/pkg/logger"
 )
 
-// ProviderType 提供商类型
-type ProviderType string
-
-const (
-	ProviderOpenAI ProviderType = "openai"
-	ProviderGemini ProviderType = "gemini"
-	ProviderClaude ProviderType = "claude"
-	ProviderCustom ProviderType = "custom"
-)
-
-// Service LLM 服务
+// Service manages the active OpenAI-compatible provider.
 type Service struct {
-	config   config.Config // 存储配置副本，不是指针
+	mu       sync.RWMutex
+	config   config.Config
 	provider Provider
 }
 
-// NewService 创建 LLM 服务
 func NewService(cfg config.Config, cm *config.ConfigManager) *Service {
 	s := &Service{
-		config: cfg, // 存储配置副本
+		config: cfg,
 	}
-	s.UpdateProvider()
+	s.updateProviderLocked()
 
-	// 自注册配置变更回调
-	cm.Subscribe(func(NewConfig config.Config, oldConfig config.Config) {
-		s.config = NewConfig // 更新配置副本
-		s.UpdateProvider()
+	cm.Subscribe(func(newConfig config.Config, oldConfig config.Config) {
+		s.mu.Lock()
+		s.config = newConfig
+		s.updateProviderLocked()
+		s.mu.Unlock()
 		logger.Println("LLM Provider 已更新")
 	})
 
 	return s
 }
 
-// UpdateProvider 更新 Provider（配置变更时调用）
-func (s *Service) UpdateProvider() {
-	providerType := DetectProviderType(s.config.Provider)
-	s.provider = CreateProvider(providerType, &s.config) // 传递配置的指针给 Provider
+func (s *Service) updateProviderLocked() {
+	s.provider = NewOpenAIAdapter(&s.config)
 }
 
-// GetProvider 获取当前 Provider
 func (s *Service) GetProvider() Provider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.provider
 }
 
-// DetectProviderType 根据 baseURL 或 model 名称自动识别提供商
-func DetectProviderType(Provider string) ProviderType {
-	switch {
-	case strings.Contains(Provider, "google"):
-		return ProviderGemini
-	case strings.Contains(Provider, "anthropic"):
-		return ProviderClaude
-	case strings.Contains(Provider, "custom"):
-		return ProviderCustom
-	}
-	return ProviderOpenAI
-}
-
-// CreateProvider 工厂函数：根据类型创建对应 Provider
-func CreateProvider(providerType ProviderType, cfg *config.Config) Provider {
-	switch providerType {
-	case ProviderGemini:
-		adapter, err := NewGeminiAdapter(cfg)
-		if err != nil {
-			logger.Printf("创建GeminiAdapter失败: %v", err)
-			return nil
-		}
-		logger.Println("创建GeminiAdapter")
-		return adapter
-	case ProviderClaude:
-		logger.Println("创建ClaudeAdapter")
-		return NewClaudeAdapter(cfg)
-	case ProviderCustom:
-		logger.Println("创建CustomAdapter")
-		return NewCustomAdapter(cfg)
-	default:
-		logger.Println("创建OpenAIAdapter")
-		return NewOpenAIAdapter(cfg)
-	}
-}
-
-// TestConnection 测试模型连通性
-func (s *Service) TestConnection(ctx context.Context, apiKey, baseURL, model string) string {
+func (s *Service) TestConnection(ctx context.Context, apiKey, baseURL, provider, model string) string {
 	if apiKey == "" {
 		return "API Key 不能为空"
 	}
@@ -99,53 +52,53 @@ func (s *Service) TestConnection(ctx context.Context, apiKey, baseURL, model str
 		return "请选择模型"
 	}
 
-	if baseURL == "" {
-		baseURL = s.config.BaseURL
-	}
-
-	// 创建临时 config 用于测试
+	s.mu.RLock()
 	tempConfig := s.config
+	s.mu.RUnlock()
+
 	tempConfig.APIKey = apiKey
 	tempConfig.BaseURL = baseURL
+	tempConfig.Provider = provider
 	tempConfig.Model = model
 
-	providerType := DetectProviderType(s.config.Provider)
-	tempProvider := CreateProvider(providerType, &tempConfig)
+	tempProvider := NewOpenAIAdapter(&tempConfig)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	err := tempProvider.TestChat(timeoutCtx)
-	if err != nil {
+	if err := tempProvider.TestChat(timeoutCtx); err != nil {
 		return err.Error()
 	}
 
 	return ""
 }
 
-// GetModels 获取模型列表
-func (s *Service) GetModels(ctx context.Context, apiKey string, baseURL string) ([]string, error) {
-	if baseURL == "" {
-		baseURL = s.config.BaseURL
-	}
+func (s *Service) GetModels(ctx context.Context, apiKey, baseURL, provider string) ([]string, error) {
+	s.mu.RLock()
+	currentAPIKey := s.config.APIKey
+	currentProvider := s.provider
+	cfg := s.config
+	s.mu.RUnlock()
+
 	if apiKey == "" {
-		apiKey = s.config.APIKey
+		apiKey = currentAPIKey
 	}
 
-	// 如果提供了临时参数，使用临时 provider
-	if apiKey != s.config.APIKey || baseURL != s.config.BaseURL {
-		tempConfig := s.config
+	if apiKey != currentAPIKey || baseURL != cfg.BaseURL || provider != cfg.Provider {
+		tempConfig := cfg
 		tempConfig.APIKey = apiKey
-		tempConfig.BaseURL = baseURL
-
-		providerType := DetectProviderType(s.config.Provider)
-		tempProvider := CreateProvider(providerType, &tempConfig)
+		if baseURL != "" {
+			tempConfig.BaseURL = baseURL
+		}
+		if provider != "" {
+			tempConfig.Provider = provider
+		}
+		tempProvider := NewOpenAIAdapter(&tempConfig)
 		return tempProvider.GetModels(ctx)
 	}
 
-	// 使用当前 provider
-	if s.provider == nil {
+	if currentProvider == nil {
 		return nil, fmt.Errorf("provider not initialized")
 	}
-	return s.provider.GetModels(ctx)
+	return currentProvider.GetModels(ctx)
 }

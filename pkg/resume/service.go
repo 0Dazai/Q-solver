@@ -9,31 +9,35 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type Service struct {
-	config       config.Config // 存储配置副本
-	resumeBase64 string        // 缓存的简历 Base64
+	mu           sync.RWMutex
+	config       config.Config
+	resumeBase64 string
 }
 
 func NewService(cfg config.Config, cm *config.ConfigManager) *Service {
 	s := &Service{
 		config: cfg,
 	}
-	// 订阅配置变更，同步配置
-	cm.Subscribe(func(NewConfig config.Config, oldConfig config.Config) {
-		s.config = NewConfig
-		// 如果简历路径变了，清空缓存
-		if NewConfig.ResumePath != oldConfig.ResumePath {
+
+	cm.Subscribe(func(newConfig config.Config, oldConfig config.Config) {
+		s.mu.Lock()
+		s.config = newConfig
+		if newConfig.ResumePath != oldConfig.ResumePath {
 			s.resumeBase64 = ""
 		}
+		s.mu.Unlock()
 	})
+
 	return s
 }
 
-// SelectResume 打开文件对话框选择简历，并返回路径
 func (s *Service) SelectResume(ctx context.Context) string {
 	selection, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
 		Title: "选择简历 (PDF)",
@@ -51,77 +55,96 @@ func (s *Service) SelectResume(ctx context.Context) string {
 	}
 
 	if selection == "" {
-		return "" // 用户取消
+		return ""
 	}
 
-	// 不再直接修改配置，由调用者处理
 	return selection
 }
 
-// ClearResume 清除简历缓存
 func (s *Service) ClearResume() {
+	s.mu.Lock()
 	s.resumeBase64 = ""
+	s.mu.Unlock()
 	logger.Println("简历缓存已清除")
 }
 
-// GetResumeBase64 读取简历并转换为 Base64
 func (s *Service) GetResumeBase64() (string, error) {
-	// 读一下缓存
-	if len(s.resumeBase64) > 0 {
+	s.mu.RLock()
+	cached := s.resumeBase64
+	resumePath := s.config.ResumePath
+	s.mu.RUnlock()
+
+	if len(cached) > 0 {
 		logger.Println("使用缓存的简历 Base64")
-		return s.resumeBase64, nil
+		return cached, nil
 	}
-	if s.config.ResumePath == "" {
+	if resumePath == "" {
 		return "", nil
 	}
 
-	// 检查文件大小
-	fileInfo, err := os.Stat(s.config.ResumePath)
+	fileInfo, err := os.Stat(resumePath)
 	if err != nil {
 		return "", err
 	}
 
-	// 限制 5MB
-	if fileInfo.Size() > 5*1024*1024 {
+	const maxResumeSize = 5 * 1024 * 1024
+	if fileInfo.Size() > maxResumeSize {
 		return "", fmt.Errorf("简历文件大小超过 5MB 限制")
 	}
 
-	// 读取文件内容
-	content, err := os.ReadFile(s.config.ResumePath)
+	content, err := os.ReadFile(resumePath)
 	if err != nil {
 		return "", err
 	}
 
-	// 转换为 Base64 并缓存
 	encoded := base64.StdEncoding.EncodeToString(content)
+	s.mu.Lock()
 	s.resumeBase64 = encoded
+	s.mu.Unlock()
 	return encoded, nil
 }
 
-// ParseResume 解析简历为 Markdown
-func (s *Service) ParseResume(ctx context.Context, provider llm.Provider) (string, error) {
-	// 1. Read Resume
+func (s *Service) ParseResume(ctx context.Context) (string, error) {
 	resumeBase64, err := s.GetResumeBase64()
 	if err != nil {
 		return "", fmt.Errorf("读取简历失败: %v", err)
 	}
 	if resumeBase64 == "" {
-		return "", fmt.Errorf("未选择简历文件")
+		return "", fmt.Errorf("请先选择简历文件")
 	}
-	logger.Println("开始解析简历为 Markdown...")
 
-	// 2. 构建解析简历的消息
+	s.mu.RLock()
+	cfg := s.config
+	s.mu.RUnlock()
+
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return "", fmt.Errorf("请先配置 API Key")
+	}
+	if strings.TrimSpace(cfg.Model) == "" {
+		return "", fmt.Errorf("请先选择模型")
+	}
+
+	logger.Println("开始通过当前模型解析简历")
+
+	adapter := llm.NewOpenAIAdapter(&cfg)
 	messages := []llm.Message{
-		llm.NewUserMessage(prompts.ResumeParsePrompt),
+		llm.NewSystemMessage(prompts.ResumeParsePrompt),
 		llm.NewMultiPartMessage(llm.RoleUser, []llm.ContentPart{
+			llm.TextPart("请将这份简历解析并整理为结构清晰的 Markdown。"),
 			llm.PDFPart(resumeBase64),
 		}),
 	}
 
-	// 3. 调用 LLM Provider
-	result, err := provider.GenerateContentStream(ctx, messages, nil)
+	result, err := adapter.GenerateContent(ctx, cfg.Model, messages)
 	if err != nil {
+		logger.Printf("简历解析失败: %v", err)
 		return "", err
 	}
-	return result.Content, nil
+
+	content := strings.TrimSpace(result.Content)
+	if content == "" {
+		return "", fmt.Errorf("模型没有返回简历解析结果")
+	}
+
+	return content, nil
 }

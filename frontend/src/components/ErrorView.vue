@@ -1,17 +1,19 @@
 <template>
   <div class="error-container">
-    <div class="error-icon-large">{{ errorState.icon }}</div>
-    <div class="error-title-large">{{ errorState.title }}</div>
+    <div class="error-icon-wrap">
+      <Icon :name="errorState.icon || 'x-circle'" :size="32" class="error-icon" />
+    </div>
+    <div class="error-title">{{ errorState.title }}</div>
     <div class="error-desc">{{ errorState.desc }}</div>
-    
-    <!-- 极简模式：只保留快捷键提示 -->
-    <div class="error-shortcut-hint" style="margin-top: 20px;">
-      按下 <span class="shortcut-tag">{{ solveShortcut }}</span> 重试
+    <div class="error-hint">
+      按 <kbd class="shortcut-key">{{ solveShortcut }}</kbd> 重试
     </div>
   </div>
 </template>
 
 <script setup>
+import Icon from './Icon.vue'
+
 defineProps({
   errorState: Object,
   solveShortcut: String
@@ -26,57 +28,62 @@ defineProps({
   justify-content: center;
   height: 100%;
   text-align: center;
-  padding: var(--space-5);
-  animation: fadeInError 0.3s ease-out;
+  padding: var(--sp-5);
+  animation: fadeIn 0.3s var(--ease-out);
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes fadeInError {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.error-icon-wrap {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--sp-5);
 }
-
-.error-icon-large {
-  font-size: 64px;
-  margin-bottom: var(--space-4);
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+.error-icon {
+  color: var(--color-error);
 }
-
-.error-title-large {
+.error-title {
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
-  margin-bottom: var(--space-2);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  margin-bottom: var(--sp-2);
 }
-
 .error-desc {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--sp-6);
   max-width: 80%;
-  line-height: 1.5;
+  line-height: var(--leading-relaxed);
 }
-
-.error-shortcut-hint {
+.error-hint {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin-bottom: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   animation: pulseOpacity 2s infinite;
 }
-
 @keyframes pulseOpacity {
-  0% { opacity: 0.6; }
+  0% { opacity: 0.5; }
   50% { opacity: 1; }
-  100% { opacity: 0.6; }
+  100% { opacity: 0.5; }
 }
-
-.shortcut-tag {
-  background: var(--color-primary-light);
+.shortcut-key {
+  background: var(--accent-muted);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
-  font-weight: bold;
-  color: var(--color-primary);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  font-size: var(--text-xs);
 }
 </style>

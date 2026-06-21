@@ -9,9 +9,10 @@ import (
 type Config struct {
 	APIKey             string                         `json:"apiKey,omitempty"`
 	Provider           string                         `json:"provider,omitempty"`
-	Model              string                         `json:"model,omitempty"`
 	BaseURL            string                         `json:"baseURL,omitempty"`
+	Model              string                         `json:"model,omitempty"`
 	Prompt             string                         `json:"prompt,omitempty"`
+	DomainId           string                         `json:"domainId,omitempty"` // 行业/岗位选择ID
 	Opacity            float64                        `json:"opacity,omitempty"`
 	NoCompression      bool                           `json:"noCompression,omitempty"`
 	CompressionQuality int                            `json:"compressionQuality,omitempty"`
@@ -21,69 +22,52 @@ type Config struct {
 	InterruptThinking  bool                           `json:"interruptThinking,omitempty"`
 	ScreenshotMode     string                         `json:"screenshotMode,omitempty"`
 	ResumePath         string                         `json:"resumePath,omitempty"`
-	ResumeBase64       string                         `json:"-"`
 	ResumeContent      string                         `json:"resumeContent,omitempty"`
-	UseMarkdownResume  bool                           `json:"useMarkdownResume,omitempty"`
 	Shortcuts          map[string]shortcut.KeyBinding `json:"shortcuts,omitempty"`
-
-	// LLM 生成参数
-	Temperature    float64 `json:"temperature,omitempty"`
-	TopP           float64 `json:"topP,omitempty"`
-	TopK           int     `json:"topK,omitempty"`
-	MaxTokens      int     `json:"maxTokens,omitempty"`
-	ThinkingBudget int     `json:"thinkingBudget,omitempty"`
 
 	// 辅助模型（用于总结对话生成问题导图）
 	AssistantModel string `json:"assistantModel,omitempty"`
 
-	// Live API
-	UseLiveApi bool `json:"useLiveApi,omitempty"`
-
 	// 窗口尺寸
 	WindowWidth  int `json:"windowWidth,omitempty"`
 	WindowHeight int `json:"windowHeight,omitempty"`
+
+	// 主题（light / dark）
+	Theme string `json:"theme,omitempty"`
 }
 
-const DefaultModel = "gemini-2.5-flash"
+const DefaultModel = ""
 
 func NewDefaultConfig() Config {
 	return Config{
 		APIKey:             "",
+		Provider:           "openai",
+		BaseURL:            "https://api.openai.com/v1",
 		Model:              DefaultModel,
-		BaseURL:            "",
 		ResumePath:         "",
 		Prompt:             "",
+		DomainId:           "general-assistant", // 默认选择通用的
 		Opacity:            1.0,
 		KeepContext:        false,
 		InterruptThinking:  false,
-		ScreenshotMode:     "window",
-		NoCompression:      false,
-		CompressionQuality: 80,
-		Sharpening:         0.0,
-		Grayscale:          false,
-		UseMarkdownResume:  false,
-		ResumeBase64:       "",
+		ScreenshotMode:     "fullscreen", // 默认全屏截图，确保捕获完整内容
+		NoCompression:      false,        // 保持压缩以减小文件大小
+		CompressionQuality: 92,           // 高质量压缩，确保 AI 清晰识别文字
+		Sharpening:         0.3,          // 适度锐化，增强文字边缘清晰度
+		Grayscale:          false,        // 保持彩色，某些场景颜色有意义
 		ResumeContent:      "",
-		Provider:           "google",
 
 		Shortcuts: getDefaultShortcuts(),
-
-		// LLM 生成参数默认值
-		Temperature:    1.0,
-		TopP:           0.95,
-		TopK:           40,
-		MaxTokens:      8192,
-		ThinkingBudget: 16000,
 
 		// 辅助模型
 		AssistantModel: "",
 
-		// Live API
-		UseLiveApi: false,
-
 		// 窗口尺寸默认值
 		WindowWidth:  0,
 		WindowHeight: 0,
+
+		// 主题默认值
+		Theme: "light",
 	}
 }
 
@@ -93,6 +77,8 @@ func getDefaultShortcuts() map[string]shortcut.KeyBinding {
 		// macOS 使用简化的快捷键（不依赖 Windows VK 码）
 		return map[string]shortcut.KeyBinding{
 			"solve":        {ComboID: "Cmd+1", KeyName: "⌘1"},
+			"send":         {ComboID: "Cmd+J", KeyName: "⌘J"},
+			"delete":       {ComboID: "Cmd+D", KeyName: "⌘D"},
 			"toggle":       {ComboID: "Cmd+2", KeyName: "⌘2"},
 			"clickthrough": {ComboID: "Cmd+3", KeyName: "⌘3"},
 			"move_up":      {ComboID: "Cmd+Option+Up", KeyName: "⌘⌥↑"},
@@ -105,8 +91,11 @@ func getDefaultShortcuts() map[string]shortcut.KeyBinding {
 	}
 	// Windows 默认快捷键
 	return map[string]shortcut.KeyBinding{
-		"solve":        {ComboID: "119", KeyName: "F8"},
+		"screenshot":   {ComboID: "119", KeyName: "F8"},
+		"send":         {ComboID: "74+162", KeyName: "Ctrl+J"},
+		"delete":       {ComboID: "68+162", KeyName: "Ctrl+D"},
 		"toggle":       {ComboID: "120", KeyName: "F9"},
+		"minimize":     {ComboID: "118", KeyName: "F7"},
 		"clickthrough": {ComboID: "121", KeyName: "F10"},
 		"move_up":      {ComboID: "38+164", KeyName: "Alt+↑"},
 		"move_down":    {ComboID: "40+164", KeyName: "Alt+↓"},

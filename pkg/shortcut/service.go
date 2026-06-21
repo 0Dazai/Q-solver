@@ -68,15 +68,24 @@ func (s *Service) StopRecording() {
 
 func (s *Service) handleTrigger(action string) {
 	switch action {
-	case "solve":
-		logger.Println("触发解题")
-		s.delegate.TriggerSolve()
+	case "screenshot":
+		logger.Println("触发截图")
+		s.delegate.TriggerScreenshot()
+	case "send":
+		logger.Println("触发发送")
+		s.delegate.TriggerSend()
+	case "delete":
+		logger.Println("触发删除截图")
+		s.delegate.TriggerDeleteScreenshot()
 	case "toggle":
 		logger.Println("切换可见性")
 		s.delegate.ToggleVisibility()
 	case "clickthrough":
 		logger.Println("切换鼠标穿透")
 		s.delegate.ToggleClickThrough()
+	case "minimize":
+		logger.Println("切换窗口收起/恢复")
+		s.delegate.ToggleMinimizeWindow()
 	case "move_up":
 		s.delegate.MoveWindow(0, -10)
 	case "move_down":

@@ -26,7 +26,9 @@ var macDefaultShortcuts = map[string]struct {
 	mods []hotkey.Modifier
 	key  hotkey.Key
 }{
-	"solve":        {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.Key1},
+	"screenshot":   {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.Key1},
+	"send":         {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.KeyJ},
+	"delete":       {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.KeyD},
 	"toggle":       {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.Key2},
 	"clickthrough": {[]hotkey.Modifier{hotkey.ModCmd}, hotkey.Key3},
 	// 方向键快捷键使用 Command + Option + 方向键

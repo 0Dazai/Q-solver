@@ -2,61 +2,100 @@ package llm
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"Q-Solver/pkg/config"
+	"Q-Solver/pkg/logger"
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
 
-// OpenAIAdapter OpenAI 适配器
 type OpenAIAdapter struct {
-	client     *openai.Client
-	httpClient *http.Client
-	config     *config.Config
+	client *openai.Client
+	config *config.Config
 }
 
-// NewOpenAIAdapter 创建 OpenAI 适配器
+const unsupportedImageInputMessage = "当前模型不支持图片输入，请切换到豆包等视觉模型。"
+
 func NewOpenAIAdapter(cfg *config.Config) *OpenAIAdapter {
-	model := cfg.Model
-	if model == "" {
-		model = openai.ChatModelGPT4o
+	adapterConfig := *cfg
+	if adapterConfig.Model == "" {
+		adapterConfig.Model = openai.ChatModelGPT4o
 	}
-	// proxyUrl, _ := url.Parse("http://127.0.0.1:8888")
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-		// Proxy: http.ProxyURL(proxyUrl),
-	}
-	httpClient := &http.Client{
-		Transport: transport,
+
+	baseURL := strings.TrimSpace(adapterConfig.BaseURL)
+	if baseURL == "" {
+		baseURL = defaultBaseURL(providerCode(&adapterConfig))
 	}
 
 	opts := []option.RequestOption{
-		option.WithAPIKey(cfg.APIKey),
-		option.WithHTTPClient(httpClient),
-	}
-
-	if cfg.BaseURL != "" {
-		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
+		option.WithAPIKey(adapterConfig.APIKey),
+		option.WithBaseURL(baseURL),
 	}
 
 	client := openai.NewClient(opts...)
 
 	return &OpenAIAdapter{
-		client:     &client,
-		httpClient: httpClient,
-		config:     cfg,
+		client: &client,
+		config: &adapterConfig,
 	}
 }
 
-// ==================== 类型转换方法 ====================
+func providerCode(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	if provider != "" {
+		return provider
+	}
+	baseURL := strings.ToLower(strings.TrimSpace(cfg.BaseURL))
+	switch {
+	case strings.Contains(baseURL, "deepseek.com"):
+		return "deepseek"
+	case strings.Contains(baseURL, "ark.cn-beijing.volces.com"), strings.Contains(baseURL, "volces.com"):
+		return "doubao"
+	default:
+		return "custom"
+	}
+}
 
-// toOpenAIMessages 将统一格式转换为 OpenAI SDK 格式
+func defaultBaseURL(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "deepseek":
+		return "https://api.deepseek.com/v1"
+	case "doubao", "volcengine", "ark":
+		return "https://ark.cn-beijing.volces.com/api/v3"
+	default:
+		return "https://api.openai.com/v1"
+	}
+}
+
+func supportsImageInput(cfg *config.Config) bool {
+	return providerCode(cfg) != "deepseek"
+}
+
+func hasImageInput(messages []Message) bool {
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if part.Type == ContentImage || part.Type == ContentPDF {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (a *OpenAIAdapter) validateMessages(messages []Message) error {
+	if hasImageInput(messages) && !supportsImageInput(a.config) {
+		return fmt.Errorf(unsupportedImageInputMessage)
+	}
+	return nil
+}
+
 func (a *OpenAIAdapter) toOpenAIMessages(messages []Message) []openai.ChatCompletionMessageParamUnion {
 	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
 
@@ -80,7 +119,6 @@ func (a *OpenAIAdapter) toOpenAIMessages(messages []Message) []openai.ChatComple
 	return result
 }
 
-// toOpenAIParts 将 ContentPart 转换为 OpenAI 格式
 func (a *OpenAIAdapter) toOpenAIParts(parts []ContentPart) []openai.ChatCompletionContentPartUnionParam {
 	result := make([]openai.ChatCompletionContentPartUnionParam, 0, len(parts))
 
@@ -98,18 +136,16 @@ func (a *OpenAIAdapter) toOpenAIParts(parts []ContentPart) []openai.ChatCompleti
 	return result
 }
 
-// ==================== Provider 接口实现 ====================
-
-// GenerateContentStream 流式生成内容
 func (a *OpenAIAdapter) GenerateContentStream(ctx context.Context, messages []Message, onChunk StreamCallback) (Message, error) {
+	if err := a.validateMessages(messages); err != nil {
+		return Message{}, err
+	}
+
 	openaiMessages := a.toOpenAIMessages(messages)
 
 	stream := a.client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
-		Model:       a.config.Model,
-		Messages:    openaiMessages,
-		Temperature: openai.Float(a.config.Temperature),
-		TopP:        openai.Float(a.config.TopP),
-		MaxTokens:   openai.Int(int64(a.config.MaxTokens)),
+		Model:    a.config.Model,
+		Messages: openaiMessages,
 	})
 
 	defer stream.Close()
@@ -121,17 +157,17 @@ func (a *OpenAIAdapter) GenerateContentStream(ctx context.Context, messages []Me
 		evt := stream.Current()
 
 		if len(evt.Choices) > 0 {
-			delta := evt.Choices[0].Delta
-			content := delta.Content
+			if thinkingRaw, ok := evt.Choices[0].Delta.JSON.ExtraFields["reasoning"]; ok {
+				a.handleThinkingChunk(thinkingRaw.Raw(), &fullThinking, onChunk)
+			} else if thinkingRaw, ok := evt.Choices[0].Delta.JSON.ExtraFields["reasoning_content"]; ok {
+				a.handleThinkingChunk(thinkingRaw.Raw(), &fullThinking, onChunk)
+			}
 
+			content := evt.Choices[0].Delta.Content
 			if content != "" {
 				fullContent.WriteString(content)
-
 				if onChunk != nil {
-					onChunk(StreamChunk{
-						Type:    ChunkContent,
-						Content: content,
-					})
+					onChunk(StreamChunk{Type: ChunkContent, Content: content})
 				}
 			}
 		}
@@ -148,13 +184,24 @@ func (a *OpenAIAdapter) GenerateContentStream(ctx context.Context, messages []Me
 	}, nil
 }
 
-// parseError 解析错误信息
+func (a *OpenAIAdapter) handleThinkingChunk(rawJSON string, builder *strings.Builder, onChunk StreamCallback) {
+	var decoded string
+	if err := json.Unmarshal([]byte(rawJSON), &decoded); err != nil {
+		logger.Printf("解析思考过程失败: %v", err)
+		return
+	}
+	builder.WriteString(decoded)
+	if onChunk != nil {
+		onChunk(StreamChunk{Type: ChunkThinking, Content: decoded})
+	}
+}
+
 func (a *OpenAIAdapter) parseError(err error) error {
 	errStr := err.Error()
 
 	startIndex := strings.Index(errStr, "{")
 	if startIndex == -1 {
-		return fmt.Errorf("未知错误: %s", errStr)
+		return fmt.Errorf("请求失败，请稍后重试")
 	}
 
 	jsonPart := errStr[startIndex:]
@@ -165,53 +212,45 @@ func (a *OpenAIAdapter) parseError(err error) error {
 		Type       string `json:"type"`
 	}
 
-	_ = json.Unmarshal([]byte(jsonPart), &response)
-	headerPart := errStr[:startIndex]
-
-	lastColon := strings.LastIndex(headerPart, ":")
-	if lastColon != -1 {
-		statusPart := headerPart[lastColon+1:]
-		if _, scanErr := fmt.Sscanf(statusPart, "%d", &response.StatusCode); scanErr != nil {
-			response.StatusCode = 500
-		}
-	} else {
-		response.StatusCode = -1
+	if parseErr := json.Unmarshal([]byte(jsonPart), &response); parseErr != nil {
+		return fmt.Errorf("请求失败，请稍后重试")
 	}
 
-	finalJsonBytes, marshalErr := json.Marshal(response)
-	if marshalErr != nil {
-		return fmt.Errorf("解析错误: %s", response.Message)
+	if response.Message != "" {
+		return fmt.Errorf("%s", response.Message)
 	}
 
-	return fmt.Errorf("%s", string(finalJsonBytes))
+	return fmt.Errorf("请求失败，请稍后重试")
 }
 
-// TestChat 测试连通性
 func (a *OpenAIAdapter) TestChat(ctx context.Context) error {
 	_, err := a.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Model: a.config.Model,
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("hi"),
 		},
-		MaxTokens: openai.Int(1),
+		MaxTokens: openai.Int(17),
 	})
-	return err
+	if err != nil {
+		return a.parseError(err)
+	}
+	return nil
 }
 
-// GenerateContent 非流式生成内容
 func (a *OpenAIAdapter) GenerateContent(ctx context.Context, model string, messages []Message) (Message, error) {
 	if model == "" {
 		model = a.config.Model
 	}
 
+	if err := a.validateMessages(messages); err != nil {
+		return Message{}, err
+	}
+
 	openaiMessages := a.toOpenAIMessages(messages)
 
 	resp, err := a.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Model:       model,
-		Messages:    openaiMessages,
-		Temperature: openai.Float(a.config.Temperature),
-		TopP:        openai.Float(a.config.TopP),
-		MaxTokens:   openai.Int(int64(a.config.MaxTokens)),
+		Model:    model,
+		Messages: openaiMessages,
 	})
 
 	if err != nil {
@@ -229,12 +268,13 @@ func (a *OpenAIAdapter) GenerateContent(ctx context.Context, model string, messa
 	}, nil
 }
 
-// GetModels 获取模型列表
 func (a *OpenAIAdapter) GetModels(ctx context.Context) ([]string, error) {
 	resp, err := a.client.Models.List(ctx)
 	if err != nil {
-		return nil, err
+		logger.Println("获取模型失败:", err.Error())
+		return nil, a.parseError(err)
 	}
+
 	var models []string
 	for _, m := range resp.Data {
 		models = append(models, m.ID)

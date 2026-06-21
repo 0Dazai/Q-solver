@@ -1,8 +1,9 @@
-import './style.css';
-import './app.css';
-import '@vue-flow/core/dist/style.css';
-import '@vue-flow/core/dist/theme-default.css';
-import { createApp } from 'vue';
-import App from './App.vue';
+import './styles/global.css'
+import 'katex/dist/katex.min.css'
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
 
-createApp(App).mount('#app');
+const app = createApp(App)
+app.use(createPinia())
+app.mount('#app')

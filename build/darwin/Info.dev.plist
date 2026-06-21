@@ -24,7 +24,7 @@
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
         <key>NSMicrophoneUsageDescription</key>
-        <string>Q-Solver 需要访问麦克风以使用 Gemini Live API 实时语音功能</string>
+        <string>Q-Solver 需要访问麦克风以支持系统级快捷键录制与相关桌面交互能力。</string>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>
