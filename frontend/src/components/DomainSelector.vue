@@ -2,7 +2,7 @@
   <div class="domain-selector">
     <label class="domain-label">角色设定 / 场景</label>
 
-    <div class="category-tabs" v-if="categories && categories.length > 0">
+    <div ref="tabs" class="category-tabs" v-if="categories && categories.length > 0" @wheel.prevent="scrollTabs">
       <button v-for="cat in categories" :key="cat.id" class="cat-btn"
         :class="{ active: currentCategory === cat.id }" @click="currentCategory = cat.id">
         {{ cat.label }}
@@ -39,6 +39,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const currentCategory = ref('')
+const tabs = ref(null)
 
 watch(() => [props.categories, props.modelValue], () => {
   if (!currentCategory.value && props.categories.length > 0) {
@@ -55,6 +56,10 @@ const currentItems = computed(() => {
 })
 
 function selectDomain(id) { emit('update:modelValue', id) }
+function scrollTabs(event) {
+  if (!tabs.value) return
+  tabs.value.scrollLeft += event.deltaY || event.deltaX
+}
 </script>
 
 <style scoped>
@@ -81,10 +86,12 @@ function selectDomain(id) { emit('update:modelValue', id) }
   padding: 4px 6px;
   background: var(--surface-input);
   border-radius: var(--radius-md);
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   min-height: 40px;
 }
-.category-tabs::-webkit-scrollbar { height: 0; }
+.category-tabs::-webkit-scrollbar { height: 5px; }
+.category-tabs::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
 
 .cat-btn {
   font-size: var(--text-xs);

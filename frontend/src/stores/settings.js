@@ -3,7 +3,7 @@ import { reactive, ref, computed, watch } from 'vue'
 import { api } from '../services/api'
 import { useUIStore } from './ui'
 import { currentTheme, setTheme } from '../services/theme'
-import { guessProviderFromBaseURL } from '../utils/modelCapabilities'
+import { guessProviderFromBaseURL, PROVIDER_CATALOG } from '../utils/modelCapabilities'
 
 export const useSettingsStore = defineStore('settings', () => {
   const ui = useUIStore()
@@ -25,6 +25,10 @@ export const useSettingsStore = defineStore('settings', () => {
     sharpening: 0,
     grayscale: true,
     noCompression: false,
+    workMode: 'written',
+    writtenModel: { provider: 'openai', model: '', apiKey: '', apiKeySet: false, baseURL: 'https://api.openai.com/v1', protocol: 'openai_chat_completions', thinkingMode: 'auto', reasoningLevel: '', disableResponseStorage: false, maxTokens: 0, temperature: 0, systemPrompt: '' },
+    interviewModel: { provider: 'openai', model: '', apiKey: '', apiKeySet: false, baseURL: 'https://api.openai.com/v1', protocol: 'openai_chat_completions', thinkingMode: 'disabled', reasoningLevel: '', disableResponseStorage: false, maxTokens: 0, temperature: 0, systemPrompt: '' },
+    transcription: { engine: 'auto', apiKey: '', apiKeySet: false, model: 'fun-asr-realtime-2025-09-15', endpoint: 'wss://dashscope.aliyuncs.com/api-ws/v1/inference', region: '', language: 'zh', hotwords: [], contextPhrases: [], vocabularyId: '', sentenceWaitMs: 1300, autoSubmit: true },
   })
 
   const tempSettings = reactive({ ...settings })
@@ -33,6 +37,11 @@ export const useSettingsStore = defineStore('settings', () => {
   const domainCategories = ref([])
   const resumeRawContent = ref('')
   const isResumeParsing = ref(false)
+  const modelLists = reactive({ written: [], interview: [] })
+  const modelLoading = reactive({ written: false, interview: false })
+  const modelTesting = reactive({ written: false, interview: false })
+  const modelConnections = reactive({ written: null, interview: null })
+  const modeSwitching = ref(false)
 
   const isMacOS = ref(
     typeof navigator !== 'undefined' &&
@@ -45,6 +54,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const shortcutActions = [
     { action: 'screenshot', label: '截图', default: 'F8', macDefault: 'Cmd+1' },
     { action: 'send', label: '发送解题', default: 'Ctrl+J', macDefault: 'Cmd+J' },
+    { action: 'cancel', label: '中断当前回答', default: 'Esc', macDefault: 'Esc' },
     { action: 'delete', label: '删除截图', default: 'Ctrl+D', macDefault: 'Cmd+D' },
     { action: 'toggle', label: '隐藏/显示', default: 'F9', macDefault: 'Cmd+2' },
     { action: 'minimize', label: '收起/恢复窗口', default: 'F7', macDefault: 'Cmd+4' },
@@ -55,6 +65,8 @@ export const useSettingsStore = defineStore('settings', () => {
     { action: 'move_right', label: '向右移动', default: 'Alt+Right', macDefault: 'Cmd+Option+Right' },
     { action: 'scroll_up', label: '向上滚动', default: 'Alt+PgUp', macDefault: 'Cmd+Option+Shift+Up' },
     { action: 'scroll_down', label: '向下滚动', default: 'Alt+PgDn', macDefault: 'Cmd+Option+Shift+Down' },
+    { action: 'mode_toggle', label: '切换笔试/面试模式', default: 'F6', macDefault: 'Cmd+4' },
+    { action: 'interview_listening', label: '开始/暂停面试监听', default: 'F11', macDefault: 'Cmd+5' },
   ]
 
   const maskedKey = computed(() => {
@@ -68,12 +80,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const deleteShortcut = computed(() => shortcuts.delete?.keyName || 'Ctrl+D')
   const toggleShortcut = computed(() => shortcuts.toggle?.keyName || 'F9')
   const minimizeShortcut = computed(() => shortcuts.minimize?.keyName || 'F7')
+  const cancelShortcut = computed(() => shortcuts.cancel?.keyName || 'Esc')
 
   const statusText = ref('就绪')
   const statusIcon = ref('●')
 
   function resetStatus() {
-    if (!settings.apiKey) {
+    if (!settings.writtenModel.apiKeySet) {
       statusText.value = '未配置'
       statusIcon.value = '!'
     } else {
@@ -82,7 +95,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  watch(() => settings.apiKey, () => resetStatus(), { immediate: true })
+  watch(() => settings.writtenModel.apiKeySet, () => resetStatus(), { immediate: true })
 
   watch(() => tempSettings.transparency, (newVal) => {
     applyTransparency(1.0 - newVal)
@@ -151,11 +164,11 @@ export const useSettingsStore = defineStore('settings', () => {
       applyConfig(backendConfig)
       if (backendConfig.shortcuts) Object.assign(shortcuts, backendConfig.shortcuts)
       if (backendConfig.theme) setTheme(backendConfig.theme)
-      if (settings.apiKey && (!settings.model || settings.model === 'auto')) {
-        await fetchModels(settings.apiKey)
-        if (ui.availableModels.length > 0 && !settings.model) {
-          settings.model = ui.availableModels[0]
-          tempSettings.model = ui.availableModels[0]
+      if ((settings.writtenModel.apiKey || settings.writtenModel.apiKeySet) && (!settings.writtenModel.model || settings.writtenModel.model === 'auto')) {
+        await fetchModels(settings.writtenModel)
+        if (modelLists.written.length > 0 && !settings.model) {
+          settings.writtenModel.model = modelLists.written[0]
+          tempSettings.writtenModel.model = modelLists.written[0]
         }
       }
     } catch (e) {
@@ -164,10 +177,10 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   function applyConfig(config) {
-    settings.apiKey = config.apiKey || ''
-    settings.provider = config.provider || guessProviderFromBaseURL(config.baseURL)
-    settings.baseURL = config.baseURL || 'https://api.openai.com/v1'
-    settings.model = config.model || ''
+    settings.apiKey = ''
+    settings.provider = config.writtenModel?.provider || config.provider || guessProviderFromBaseURL(config.baseURL)
+    settings.baseURL = config.writtenModel?.baseURL || config.baseURL || 'https://api.openai.com/v1'
+    settings.model = config.writtenModel?.model || config.model || ''
     settings.assistantModel = config.assistantModel || ''
     settings.prompt = config.prompt || ''
     settings.domainId = config.domainId || 'general-assistant'
@@ -179,6 +192,18 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.resumePath = config.resumePath || ''
     settings.resumeContent = config.resumeContent || ''
     settings.screenshotMode = config.screenshotMode || 'window'
+    settings.workMode = config.workMode || 'written'
+    settings.writtenModel = {
+      ...settings.writtenModel,
+      ...(config.writtenModel || {}),
+      provider: config.writtenModel?.provider || config.provider || 'openai',
+      model: config.writtenModel?.model || config.model || '',
+      apiKey: '',
+      apiKeySet: Boolean(config.writtenModel?.apiKeySet),
+      baseURL: config.writtenModel?.baseURL || config.baseURL || 'https://api.openai.com/v1',
+    }
+    settings.interviewModel = { ...settings.interviewModel, ...(config.interviewModel || {}), apiKey: '', apiKeySet: Boolean(config.interviewModel?.apiKeySet) }
+    settings.transcription = { ...settings.transcription, ...(config.transcription || {}), apiKey: '', apiKeySet: Boolean(config.transcription?.apiKeySet) }
 
     const opacity = config.opacity !== undefined ? config.opacity : 1.0
     settings.transparency = 1.0 - opacity
@@ -186,25 +211,29 @@ export const useSettingsStore = defineStore('settings', () => {
     Object.assign(tempSettings, JSON.parse(JSON.stringify(settings)))
   }
 
-  async function fetchModels(apiKey) {
-    if (!apiKey) return false
-    ui.isLoadingModels = true
+  async function fetchModels(profile = tempSettings.writtenModel, mode = 'written') {
+    const apiKey = profile.apiKey
+    if (!apiKey && !profile.apiKeySet) {
+      ui.showToast('请先填写并保存该模型的 API Key', 'warning')
+      return false
+    }
+    modelLoading[mode] = true
     try {
-      const baseURL = tempSettings.baseURL || settings.baseURL
-      const provider = guessProviderFromBaseURL(baseURL)
-      const models = await api.getModels(apiKey, baseURL, provider)
+      const baseURL = profile.baseURL
+      const provider = profile.provider || guessProviderFromBaseURL(baseURL)
+      const models = await api.getProfileModels(mode, apiKey, baseURL, provider)
       if (models && models.length > 0) {
-        ui.availableModels = models
-        if (!tempSettings.model || !models.includes(tempSettings.model)) {
-          tempSettings.model = models[0]
+        modelLists[mode] = models
+        if (!profile.model) {
+          profile.model = models[0]
         }
         return true
       }
-      ui.availableModels = []
+      modelLists[mode] = []
       return false
     } catch (e) {
       console.error('获取模型列表失败', e)
-      ui.availableModels = []
+      modelLists[mode] = []
       let errorMsg = '获取模型列表失败'
       try {
         const errObj = JSON.parse(e.message || e)
@@ -212,44 +241,57 @@ export const useSettingsStore = defineStore('settings', () => {
       } catch (_) {
         errorMsg = e.message || '获取模型列表失败'
       }
+      const definition = PROVIDER_CATALOG[profile.provider || guessProviderFromBaseURL(profile.baseURL)]
+      if (definition?.modelListing === 'manual') {
+        errorMsg = `${definition.label} 不提供标准模型列表，请手动输入模型 ID。`
+      }
       ui.showToast(errorMsg, 'error')
       return false
     } finally {
-      ui.isLoadingModels = false
+      modelLoading[mode] = false
     }
   }
 
-  async function refreshModels() {
-    if (!tempSettings.apiKey) {
-      ui.showToast('请先填写 API Key', 'warning')
-      return
-    }
-    const success = await fetchModels(tempSettings.apiKey)
-    if (success && ui.availableModels.length > 0) {
-      ui.showToast(`已加载 ${ui.availableModels.length} 个模型`, 'success')
+  async function refreshModels(mode = 'written') {
+    const profile = mode === 'interview' ? tempSettings.interviewModel : tempSettings.writtenModel
+    const success = await fetchModels(profile, mode)
+    if (success && modelLists[mode].length > 0) {
+      ui.showToast(`已加载 ${modelLists[mode].length} 个模型`, 'success')
     }
   }
 
-  async function testConnection() {
-    if (!tempSettings.model) {
+  async function testConnection(mode = 'written') {
+    const profile = mode === 'interview' ? tempSettings.interviewModel : tempSettings.writtenModel
+    if (!profile.model) {
       ui.showToast('请先选择模型', 'warning')
       return
     }
-    ui.isTestingConnection = true
-    ui.connectionStatus = null
+    modelTesting[mode] = true
+    modelConnections[mode] = null
     try {
-      const baseURL = tempSettings.baseURL || settings.baseURL
-      const provider = guessProviderFromBaseURL(baseURL)
-      const result = await api.testConnection(tempSettings.apiKey, baseURL, provider, tempSettings.model)
+      const result = await api.testModelProfile(mode, profile.apiKey, profile.baseURL, profile.provider || guessProviderFromBaseURL(profile.baseURL), profile.model, profile.protocol, profile.thinkingMode, profile.reasoningLevel)
       if (result === '') {
-        ui.connectionStatus = { type: 'success', icon: '✓', message: `模型 ${tempSettings.model} 连接成功` }
+        modelConnections[mode] = { type: 'success', icon: '✓', message: `模型 ${profile.model} 连接成功` }
         ui.showToast('连接测试成功', 'success')
       } else {
-        ui.connectionStatus = { type: 'error', icon: '!', message: result }
+        modelConnections[mode] = { type: 'error', icon: '!', message: result }
         ui.showToast('连接测试失败', 'error')
       }
     } catch (e) {
-      ui.connectionStatus = { type: 'error', icon: '!', message: e.message || '连接测试失败' }
+      modelConnections[mode] = { type: 'error', icon: '!', message: e.message || '连接测试失败' }
+    } finally {
+      modelTesting[mode] = false
+    }
+  }
+
+  async function testTranscription() {
+    const asr = tempSettings.transcription
+    ui.isTestingConnection = true
+    try {
+      const result = await api.testTranscriptionConnection(asr.apiKey, asr.model, asr.endpoint, asr.language, asr.engine)
+      ui.showToast(result || (asr.engine === 'windows' || (!asr.apiKey && !asr.apiKeySet) ? 'Windows 语音识别可用' : '千问连接测试成功'), result ? 'error' : 'success')
+    } catch (e) {
+      ui.showToast(e.message || '千问连接测试失败', 'error')
     } finally {
       ui.isTestingConnection = false
     }
@@ -257,12 +299,12 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function buildConfigToSave(sourceSettings, sourceShortcuts) {
     return {
-      apiKey: sourceSettings.apiKey,
-      provider: guessProviderFromBaseURL(sourceSettings.baseURL),
-      baseURL: sourceSettings.baseURL,
-      model: sourceSettings.model,
+      apiKey: '',
+      provider: sourceSettings.writtenModel.provider,
+      baseURL: sourceSettings.writtenModel.baseURL,
+      model: sourceSettings.writtenModel.model,
       assistantModel: sourceSettings.assistantModel,
-      prompt: sourceSettings.prompt || '',
+      prompt: sourceSettings.writtenModel.systemPrompt || sourceSettings.prompt || '',
       domainId: sourceSettings.domainId,
       opacity: 1.0 - sourceSettings.transparency,
       keepContext: sourceSettings.keepContext,
@@ -275,16 +317,25 @@ export const useSettingsStore = defineStore('settings', () => {
       resumeContent: sourceSettings.resumeContent,
       shortcuts: sourceShortcuts,
       theme: currentTheme.value,
+      workMode: sourceSettings.workMode,
+      writtenModel: { ...sourceSettings.writtenModel },
+      interviewModel: { ...sourceSettings.interviewModel },
+      transcription: { ...sourceSettings.transcription, hotwords: splitTerms(sourceSettings.transcription.hotwords), contextPhrases: splitTerms(sourceSettings.transcription.contextPhrases) },
     }
+  }
+
+  function splitTerms(value) {
+    if (Array.isArray(value)) return value.filter(Boolean)
+    return String(value || '').split(/[\n,，]/).map(v => v.trim()).filter(Boolean)
   }
 
   async function saveSettings() {
     try {
-      if (!tempSettings.model && tempSettings.apiKey) {
+      if (!tempSettings.writtenModel.model && (tempSettings.writtenModel.apiKey || tempSettings.writtenModel.apiKeySet)) {
         ui.showToast('正在自动获取模型...', 'info')
-        await fetchModels(tempSettings.apiKey)
-        if (!tempSettings.model && ui.availableModels.length > 0) {
-          tempSettings.model = ui.availableModels[0]
+        await fetchModels(tempSettings.writtenModel)
+        if (!tempSettings.writtenModel.model && modelLists.written.length > 0) {
+          tempSettings.writtenModel.model = modelLists.written[0]
         }
       }
 
@@ -294,8 +345,17 @@ export const useSettingsStore = defineStore('settings', () => {
       if (err) {
         ui.showToast(err, 'error')
       } else {
+        const writtenKeySet = settings.writtenModel.apiKeySet || Boolean(tempSettings.writtenModel.apiKey)
+        const interviewKeySet = settings.interviewModel.apiKeySet || Boolean(tempSettings.interviewModel.apiKey)
+        const transcriptionKeySet = settings.transcription.apiKeySet || Boolean(tempSettings.transcription.apiKey)
         ui.showToast('设置已保存', 'success')
         Object.assign(settings, tempSettings)
+        settings.writtenModel.apiKey = ''
+        settings.interviewModel.apiKey = ''
+        settings.transcription.apiKey = ''
+        settings.writtenModel.apiKeySet = writtenKeySet
+        settings.interviewModel.apiKeySet = interviewKeySet
+        settings.transcription.apiKeySet = transcriptionKeySet
         resetStatus()
         closeSettings()
       }
@@ -309,11 +369,9 @@ export const useSettingsStore = defineStore('settings', () => {
     api.restoreFocus()
     Object.assign(tempSettings, JSON.parse(JSON.stringify(settings)))
     Object.assign(tempShortcuts, JSON.parse(JSON.stringify(shortcuts)))
-    ui.connectionStatus = null
+    modelConnections.written = null
+    modelConnections.interview = null
     if (settings.resumeContent) resumeRawContent.value = settings.resumeContent
-    if (settings.apiKey && ui.availableModels.length === 0) {
-      fetchModels(settings.apiKey)
-    }
     ui.showSettings = true
   }
 
@@ -333,6 +391,27 @@ export const useSettingsStore = defineStore('settings', () => {
   function resetTempSettings() {
     Object.assign(tempSettings, settings)
     applyTransparency(1.0 - settings.transparency)
+  }
+
+  function applyWorkMode(mode) {
+    settings.workMode = mode === 'interview' ? 'interview' : 'written'
+    tempSettings.workMode = settings.workMode
+  }
+
+  async function setWorkMode(mode) {
+    const target = mode === 'interview' ? 'interview' : 'written'
+    if (modeSwitching.value || settings.workMode === target) return
+    modeSwitching.value = true
+    try {
+      await api.restoreFocus()
+      const error = await api.setWorkMode(target)
+      if (error) ui.showToast(error, 'error')
+    } catch (error) {
+      ui.showToast(error?.message || '切换工作模式失败', 'error')
+    } finally {
+      modeSwitching.value = false
+      await api.removeFocus()
+    }
   }
 
   function recordKey(action) {
@@ -385,15 +464,15 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     settings, tempSettings,
     shortcuts, tempShortcuts,
-    domainCategories,
+    domainCategories, modelLists, modelLoading, modelTesting, modelConnections, modeSwitching,
     resumeRawContent, isResumeParsing,
     isMacOS,
     recordingAction, recordingText, shortcutActions,
-    maskedKey, solveShortcut, sendShortcut, deleteShortcut, toggleShortcut, minimizeShortcut,
+    maskedKey, solveShortcut, sendShortcut, deleteShortcut, toggleShortcut, minimizeShortcut, cancelShortcut,
     statusText, statusIcon, resetStatus,
-    loadSettings, fetchModels, refreshModels, testConnection,
+    loadSettings, fetchModels, refreshModels, testConnection, testTranscription,
     saveSettings, saveSettingsSilent, openSettings, closeSettings, resetTempSettings,
     recordKey, selectResume, clearResume, parseResume,
-    applyTransparency,
+    applyTransparency, applyWorkMode, setWorkMode,
   }
 })

@@ -58,6 +58,14 @@ func providerCode(cfg *config.Config) string {
 		return "deepseek"
 	case strings.Contains(baseURL, "ark.cn-beijing.volces.com"), strings.Contains(baseURL, "volces.com"):
 		return "doubao"
+	case strings.Contains(baseURL, "dashscope.aliyuncs.com"), strings.Contains(baseURL, "aliyuncs.com"):
+		return "alibaba"
+	case strings.Contains(baseURL, "generativelanguage.googleapis.com"), strings.Contains(baseURL, "googleapis.com"):
+		return "google"
+	case strings.Contains(baseURL, "moonshot.cn"):
+		return "moonshot"
+	case strings.Contains(baseURL, "openrouter.ai"):
+		return "openrouter"
 	default:
 		return "custom"
 	}
@@ -69,6 +77,14 @@ func defaultBaseURL(provider string) string {
 		return "https://api.deepseek.com/v1"
 	case "doubao", "volcengine", "ark":
 		return "https://ark.cn-beijing.volces.com/api/v3"
+	case "alibaba", "qwen":
+		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
+	case "google", "gemini":
+		return "https://generativelanguage.googleapis.com/v1beta/openai"
+	case "moonshot", "kimi":
+		return "https://api.moonshot.cn/v1"
+	case "openrouter":
+		return "https://openrouter.ai/api/v1"
 	default:
 		return "https://api.openai.com/v1"
 	}

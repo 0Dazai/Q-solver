@@ -146,41 +146,41 @@ func (sm *StateManager) IsClickThrough() bool {
 	return sm.windowState.ClickThrough
 }
 
-// ToggleVisibility 切换可见性（隐身模式）
+func applyStealthTransition(current WindowState, enabled bool) WindowState {
+	current.StealthMode = enabled
+	return current
+}
+
+// ToggleVisibility 切换录屏隔离状态；窗口在本机始终保持可见。
 func (sm *StateManager) ToggleVisibility() bool {
 	sm.windowMu.Lock()
 	defer sm.windowMu.Unlock()
 
 	if sm.hwnd == 0 {
-		logger.Println("无法切换可见性：窗口句柄未初始化")
-		return sm.windowState.Visible
+		logger.Println("窗口句柄未初始化，录屏隔离状态保持不变")
+		return sm.windowState.StealthMode
 	}
 
-	if sm.windowState.Visible {
-		// 禁用隐身模式，可被录屏检测
-		err := platform.SetDisplayAffinity(sm.hwnd, false)
-		if err != nil {
-			logger.Printf("设置显示亲和性失败: %v\n", err)
-		} else {
-			logger.Println("隐身模式已禁用，现在可被录屏程序检测到")
-		}
+	newState := !sm.windowState.StealthMode
+	if err := platform.SetDisplayAffinity(sm.hwnd, newState); err != nil {
+		logger.Printf("设置显示亲和性失败: %v\n", err)
+		return sm.windowState.StealthMode
+	}
+
+	sm.windowState = applyStealthTransition(sm.windowState, newState)
+	if newState {
+		logger.Println("隐身模式已启用，应用继续在本机显示并从受支持的屏幕捕获中排除")
 	} else {
-		// 启用隐身模式
-		err := platform.SetDisplayAffinity(sm.hwnd, true)
-		if err != nil {
-			logger.Printf("设置显示亲和性失败: %v\n", err)
-		} else {
-			logger.Println("隐身模式已启用，录屏程序现在无法检测")
-		}
+		logger.Println("隐身模式已禁用，应用会出现在屏幕捕获中")
 	}
-
-	sm.windowState.Visible = !sm.windowState.Visible
 
 	if sm.emitEvent != nil {
-		sm.emitEvent("toggle-visibility", sm.windowState.Visible)
+		sm.emitEvent("stealth-mode-state", newState)
+		// 保留旧事件，兼容已有前端与外部调用。
+		sm.emitEvent("toggle-visibility", newState)
 	}
 
-	return sm.windowState.Visible
+	return newState
 }
 
 // ToggleClickThrough 切换鼠标穿透

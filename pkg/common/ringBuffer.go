@@ -18,7 +18,7 @@ type RingBuffer struct {
 
 func NewRingBuffer(capacity int) *RingBuffer {
 	if capacity <= 0 {
-		capacity = 4096 
+		capacity = 4096
 	}
 	return &RingBuffer{
 		data: make([]byte, capacity),
@@ -34,7 +34,7 @@ func (r *RingBuffer) Write(p []byte) (n int, err error) {
 	}
 
 	pSize := len(p)
-	totalWrite := pSize 
+	totalWrite := pSize
 
 	for pSize > 0 {
 		n1 := copy(r.data[r.wHead:], p)
@@ -48,11 +48,9 @@ func (r *RingBuffer) Write(p []byte) (n int, err error) {
 		}
 		p = p[n1:]
 	}
-    
 
 	return totalWrite, nil
 }
-
 
 func (r *RingBuffer) Read(buf []byte) (int, error) {
 	r.mu.Lock()
@@ -84,7 +82,6 @@ func (r *RingBuffer) Len() int {
 	defer r.mu.Unlock()
 	return r.size
 }
-
 
 func (r *RingBuffer) Reset() {
 	r.mu.Lock()

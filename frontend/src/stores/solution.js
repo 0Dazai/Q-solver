@@ -41,6 +41,9 @@ export const useSolutionStore = defineStore('solution', () => {
     showDetails: false,
   })
 
+  // User ended answer state
+  const isUserPaused = ref(false)
+
   // ---- Helpers ----
 
   function renderMarkdown(md) {
@@ -117,6 +120,7 @@ export const useSolutionStore = defineStore('solution', () => {
     thinkingStatusText.value = 'Thinking Process'
     thinkingExpanded.value = true
     isThinkingStalled.value = false
+    isUserPaused.value = false
     if (renderRafId) { cancelAnimationFrame(renderRafId); renderRafId = null }
     renderDirty = false
     streamingHtml.value = ''
@@ -334,13 +338,35 @@ export const useSolutionStore = defineStore('solution', () => {
     }
   }
 
+  // ---- End generation (keep partial content) ----
+
+  async function cancelGeneration() {
+    isUserPaused.value = true
+    try {
+      await api.cancelTask()
+    } catch (e) {
+      console.error('取消任务失败:', e)
+    }
+    // 重置加载状态，但保留已输出内容
+    isLoading.value = false
+    isAppending.value = false
+    isThinking.value = false
+    if (stallTimer) clearTimeout(stallTimer)
+    thinkingStartTime = 0
+    if (renderRafId) { cancelAnimationFrame(renderRafId); renderRafId = null }
+    renderDirty = false
+    // 注意：不再清空 streamingHtml，保留已输出的部分内容
+    // round.aiResponse 已在 handleStreamChunk 中同步更新，包含已输出文本
+  }
+
   return {
     history, activeHistoryIndex, isLoading, isAppending, shouldOverwriteHistory,
     isThinking, thinkingStatusText, thinkingExpanded, isThinkingStalled,
-    streamingHtml, errorState, currentRounds,
+    streamingHtml, errorState, currentRounds, isUserPaused,
     renderMarkdown, getSummary, getRoundsCount, getFullContent, getThinkingPreview,
     selectHistory, handleStreamStart, handleStreamChunk, handleThinkingChunk,
     handleSolution, handleInlineError, clearInlineError,
     setStreamBuffer, setUserScreenshot, deleteHistory, exportImage,
+    cancelGeneration,
   }
 })
