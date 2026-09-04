@@ -68,6 +68,20 @@ export const FEATURED_PROVIDER_CODES = [
     'custom',
 ]
 
+// This is the single catalog used by the profile form. It deliberately records
+// protocol and discovery limits instead of assuming every URL is OpenAI-compatible.
+export const PROVIDER_CATALOG = {
+    openai: { label: 'OpenAI', baseURL: PROVIDER_BASE_URLS.openai, protocols: ['openai_chat_completions', 'openai_responses'], modelListing: 'openai' },
+    deepseek: { label: 'DeepSeek', baseURL: PROVIDER_BASE_URLS.deepseek, protocols: ['openai_chat_completions', 'openai_responses'], modelListing: 'openai', hint: 'V4 系列可使用 Responses；旧模型优先选择 Chat Completions。' },
+    alibaba: { label: '阿里云百炼 / Qwen', baseURL: PROVIDER_BASE_URLS.alibaba, protocols: ['openai_chat_completions', 'openai_responses'], modelListing: 'openai', hint: 'Qwen 混合思考模型在“关闭”时会显式发送 enable_thinking=false 或 reasoning.effort=none。' },
+    doubao: { label: '豆包 / 火山方舟', baseURL: PROVIDER_BASE_URLS.doubao, protocols: ['openai_chat_completions', 'openai_responses'], modelListing: 'openai', hint: '支持手动填写模型 ID 或 ep-... 接入点 ID；Seed 2.0 推荐 Responses。' },
+    google: { label: 'Google Gemini（OpenAI 兼容）', baseURL: PROVIDER_BASE_URLS.google, protocols: ['openai_chat_completions'], modelListing: 'manual', hint: 'Google 的 OpenAI 兼容端点不提供本应用可用的标准模型列表；请手动输入控制台中的模型 ID。' },
+    anthropic: { label: 'Anthropic Claude（兼容网关）', baseURL: '', protocols: ['openai_chat_completions'], modelListing: 'manual', hint: 'Anthropic 官方 Messages 接口不是 OpenAI 协议；请填写提供 OpenAI 兼容协议的网关地址。' },
+    moonshot: { label: 'Moonshot / Kimi', baseURL: PROVIDER_BASE_URLS.moonshot, protocols: ['openai_chat_completions'], modelListing: 'openai' },
+    openrouter: { label: 'OpenRouter', baseURL: PROVIDER_BASE_URLS.openrouter, protocols: ['openai_chat_completions'], modelListing: 'openai' },
+    custom: { label: '自定义 OpenAI 兼容', baseURL: '', protocols: ['openai_chat_completions', 'openai_responses'], modelListing: 'openai', hint: '仅在服务明确支持相应 OpenAI 协议时使用。' },
+}
+
 // 默认能力
 const defaultCapabilities = {
     text: true,

@@ -102,6 +102,14 @@
           <span class="append-text">AI 正在回复</span>
           <div class="wave-dots"><span></span><span></span><span></span></div>
         </div>
+
+        <!-- Pause generation button -->
+        <div v-if="solution.isLoading || solution.isThinking || solution.streamingHtml || solution.isAppending" class="stop-generation">
+          <button class="stop-btn" @click="solution.cancelGeneration()">
+            <Icon name="square" :size="12" />
+            <span>结束回答<template v-if="settingsStore.cancelShortcut"> ({{ settingsStore.cancelShortcut }})</template></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -389,5 +397,34 @@ const hasAnyContent = computed(() => {
 @keyframes waveDot {
   0%,60%,100% { transform: translateY(0); }
   30% { transform: translateY(-4px); }
+}
+
+/* ---- Stop Generation Button ---- */
+.stop-generation {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-4) 0;
+}
+.stop-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+}
+.stop-btn:hover {
+  background: var(--surface-card-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-border);
+}
+.stop-btn:active {
+  transform: scale(0.96);
 }
 </style>

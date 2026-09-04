@@ -2,13 +2,13 @@ package resume
 
 import (
 	"Q-Solver/pkg/config"
-	"Q-Solver/pkg/llm"
+	"Q-Solver/pkg/knowledge"
 	"Q-Solver/pkg/logger"
-	"Q-Solver/pkg/prompts"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -19,11 +19,13 @@ type Service struct {
 	mu           sync.RWMutex
 	config       config.Config
 	resumeBase64 string
+	extractPDF   func(string) (string, error)
 }
 
 func NewService(cfg config.Config, cm *config.ConfigManager) *Service {
 	s := &Service{
-		config: cfg,
+		config:     cfg,
+		extractPDF: knowledge.ExtractPDFText,
 	}
 
 	cm.Subscribe(func(newConfig config.Config, oldConfig config.Config) {
@@ -104,47 +106,24 @@ func (s *Service) GetResumeBase64() (string, error) {
 	return encoded, nil
 }
 
-func (s *Service) ParseResume(ctx context.Context) (string, error) {
-	resumeBase64, err := s.GetResumeBase64()
-	if err != nil {
-		return "", fmt.Errorf("读取简历失败: %v", err)
-	}
-	if resumeBase64 == "" {
+func (s *Service) ParseResume(_ context.Context) (string, error) {
+	s.mu.RLock()
+	resumePath := s.config.ResumePath
+	s.mu.RUnlock()
+	if strings.TrimSpace(resumePath) == "" {
 		return "", fmt.Errorf("请先选择简历文件")
 	}
 
-	s.mu.RLock()
-	cfg := s.config
-	s.mu.RUnlock()
-
-	if strings.TrimSpace(cfg.APIKey) == "" {
-		return "", fmt.Errorf("请先配置 API Key")
+	logger.Println("开始在本机提取简历 PDF")
+	extractPDF := s.extractPDF
+	if extractPDF == nil {
+		extractPDF = knowledge.ExtractPDFText
 	}
-	if strings.TrimSpace(cfg.Model) == "" {
-		return "", fmt.Errorf("请先选择模型")
-	}
-
-	logger.Println("开始通过当前模型解析简历")
-
-	adapter := llm.NewOpenAIAdapter(&cfg)
-	messages := []llm.Message{
-		llm.NewSystemMessage(prompts.ResumeParsePrompt),
-		llm.NewMultiPartMessage(llm.RoleUser, []llm.ContentPart{
-			llm.TextPart("请将这份简历解析并整理为结构清晰的 Markdown。"),
-			llm.PDFPart(resumeBase64),
-		}),
-	}
-
-	result, err := adapter.GenerateContent(ctx, cfg.Model, messages)
+	content, err := extractPDF(resumePath)
 	if err != nil {
-		logger.Printf("简历解析失败: %v", err)
+		logger.Printf("本地简历解析失败: %v", err)
 		return "", err
 	}
-
-	content := strings.TrimSpace(result.Content)
-	if content == "" {
-		return "", fmt.Errorf("模型没有返回简历解析结果")
-	}
-
-	return content, nil
+	title := strings.TrimSuffix(filepath.Base(resumePath), filepath.Ext(resumePath))
+	return "# " + title + "\n\n" + strings.TrimSpace(content) + "\n", nil
 }

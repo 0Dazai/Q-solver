@@ -3,9 +3,13 @@
     <div class="top-bar">
       <div class="bar-left" style="--wails-draggable: no-drag">
         <div class="logo">Q</div>
-        <div class="scene-pill">
-          <Icon name="camera" :size="14" />
-          <span>截图解题</span>
+        <div class="mode-switch" role="group" aria-label="工作模式">
+          <button class="mode-button" :class="{ active: !isInterview }" :disabled="settingsStore.modeSwitching" @click="settingsStore.setWorkMode('written')" title="切换到笔试模式">
+            <Icon name="camera" :size="14" /><span>笔试</span>
+          </button>
+          <button class="mode-button" :class="{ active: isInterview }" :disabled="settingsStore.modeSwitching" @click="settingsStore.setWorkMode('interview')" title="切换到面试模式">
+            <Icon name="mic" :size="14" /><span>{{ settingsStore.modeSwitching && isInterview ? '切换中' : '面试' }}</span>
+          </button>
         </div>
       </div>
 
@@ -54,17 +58,17 @@
         <div class="sp-body">
           <div class="sp-row">
             <span class="sp-label">API Key</span>
-            <span class="sp-value" :class="settingsStore.settings.apiKey ? 'ok' : 'warn'">
-              {{ settingsStore.settings.apiKey ? '已配置' : '未配置' }}
+            <span class="sp-value" :class="activeProfile.apiKeySet ? 'ok' : 'warn'">
+              {{ activeProfile.apiKeySet ? '已配置' : '未配置' }}
             </span>
           </div>
           <div class="sp-row">
             <span class="sp-label">Base URL</span>
-            <span class="sp-value model">{{ settingsStore.settings.baseURL || 'https://api.openai.com/v1' }}</span>
+            <span class="sp-value model">{{ activeProfile.baseURL || '未设置' }}</span>
           </div>
           <div class="sp-row">
             <span class="sp-label">使用模型</span>
-            <span class="sp-value model">{{ settingsStore.settings.model || '未设置' }}</span>
+            <span class="sp-value model">{{ activeProfile.model || '未设置' }}</span>
           </div>
           <div class="sp-row">
             <span class="sp-label">隐身模式</span>
@@ -92,6 +96,8 @@ defineEmits(['openSettings'])
 
 const ui = useUIStore()
 const settingsStore = useSettingsStore()
+const isInterview = computed(() => settingsStore.settings.workMode === 'interview')
+const activeProfile = computed(() => isInterview.value ? settingsStore.settings.interviewModel : settingsStore.settings.writtenModel)
 
 function minimizeWindow() {
   ui.toggleMinimizeWindow()
@@ -214,18 +220,34 @@ function showSettingsTooltip() {
   flex-shrink: 0;
   letter-spacing: -0.5px;
 }
-.scene-pill {
+.mode-switch {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
   background: var(--surface-card);
   border-radius: var(--radius-full);
-  padding: var(--sp-1) var(--sp-2-5);
-  color: var(--text-primary);
+  padding: 2px;
+  gap: 2px;
+}
+.mode-button {
+  min-width: 54px;
+  height: 26px;
+  padding: 0 var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  white-space: nowrap;
 }
+.mode-button:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-card-hover); }
+.mode-button.active { background: var(--surface-elevated); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+.mode-button:disabled { cursor: wait; opacity: .65; }
 .bar-right {
   display: flex;
   align-items: center;

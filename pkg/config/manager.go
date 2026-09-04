@@ -10,6 +10,12 @@ import (
 	"sync"
 )
 
+type protectedSecrets struct {
+	WrittenAPIKey    string `json:"writtenApiKey,omitempty"`
+	InterviewAPIKey  string `json:"interviewApiKey,omitempty"`
+	TranscriptionKey string `json:"transcriptionKey,omitempty"`
+}
+
 type ConfigManager struct {
 	config      Config
 	mu          sync.RWMutex
@@ -67,7 +73,30 @@ func (cm *ConfigManager) Load() error {
 			logger.Printf("解析配置文件失败: %v", err)
 		}
 	}
+	if secrets, err := loadProtectedSecrets(cm.configPath + ".secrets"); err != nil {
+		logger.Printf("加载受保护凭据失败: %v", err)
+	} else {
+		if secrets.WrittenAPIKey != "" {
+			cm.config.WrittenModel.APIKey = secrets.WrittenAPIKey
+		}
+		if secrets.InterviewAPIKey != "" {
+			cm.config.InterviewModel.APIKey = secrets.InterviewAPIKey
+		}
+		if secrets.TranscriptionKey != "" {
+			cm.config.Transcription.APIKey = secrets.TranscriptionKey
+		}
+	}
+	// One-time migration from the former ASR-only DPAPI file. It remains in
+	// place rather than being removed so a failed migration is reversible.
+	if cm.config.Transcription.APIKey == "" {
+		if legacy, err := loadTranscriptionSecret(cm.configPath + ".qwen-asr"); err != nil {
+			logger.Printf("加载旧千问密钥失败: %v", err)
+		} else if legacy != "" {
+			cm.config.Transcription.APIKey = legacy
+		}
+	}
 
+	cm.config.Normalize()
 	cm.ensureDefaultShortcutsLocked()
 	logger.Println("配置已加载")
 	return nil
@@ -90,7 +119,22 @@ func (cm *ConfigManager) Save() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	plain, err := json.MarshalIndent(cm.config, "", "  ")
+	secrets := protectedSecrets{
+		WrittenAPIKey:    cm.config.WrittenModel.APIKey,
+		InterviewAPIKey:  cm.config.InterviewModel.APIKey,
+		TranscriptionKey: cm.config.Transcription.APIKey,
+	}
+	if err := saveProtectedSecrets(cm.configPath+".secrets", secrets); err != nil {
+		return fmt.Errorf("保存受保护凭据失败: %w", err)
+	}
+	configForDisk := cm.config
+	// Credentials are protected by DPAPI in a separate file, never by the
+	// legacy application-wide AES envelope.
+	configForDisk.APIKey = ""
+	configForDisk.WrittenModel.APIKey = ""
+	configForDisk.InterviewModel.APIKey = ""
+	configForDisk.Transcription.APIKey = ""
+	plain, err := json.MarshalIndent(configForDisk, "", "  ")
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
@@ -118,8 +162,22 @@ func (cm *ConfigManager) UpdateFromJSON(jsonStr string) error {
 	if err := json.Unmarshal([]byte(jsonStr), &newConfig); err != nil {
 		return fmt.Errorf("解析配置 JSON 失败: %w", err)
 	}
+	newConfig.Normalize()
 
 	cm.mu.Lock()
+	// Credentials are deliberately never sent back to the frontend. An empty
+	// field from a normal settings save therefore means "unchanged", not
+	// "erase the stored key".
+	if newConfig.WrittenModel.APIKey == "" {
+		newConfig.WrittenModel.APIKey = cm.config.WrittenModel.APIKey
+	}
+	if newConfig.InterviewModel.APIKey == "" {
+		newConfig.InterviewModel.APIKey = cm.config.InterviewModel.APIKey
+	}
+	if newConfig.Transcription.APIKey == "" {
+		newConfig.Transcription.APIKey = cm.config.Transcription.APIKey
+	}
+	newConfig.Normalize()
 	cm.oldConfig = cm.config //保存当前配置为之前的配置
 	cm.config = newConfig
 	configCopy := cm.config

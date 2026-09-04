@@ -1,10 +1,12 @@
 <template>
   <TopBar @openSettings="settingsStore.openSettings" />
 
-  <WelcomeView v-if="!ui.hasStarted && solution.history.length === 0" />
-  <SolveView v-else />
-
-  <ScreenshotDock />
+  <InterviewView v-if="isInterviewMode" />
+  <template v-else>
+    <WelcomeView v-if="!ui.hasStarted && solution.history.length === 0" />
+    <SolveView v-else />
+    <ScreenshotDock />
+  </template>
   <SettingsModal />
 
   <Teleport to="body">
@@ -38,7 +40,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import TopBar from './components/TopBar.vue'
 import WelcomeView from './components/WelcomeView.vue'
 import SolveView from './components/SolveView.vue'
@@ -46,10 +48,12 @@ import ScreenshotDock from './components/ScreenshotDock.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import ResizeHandle from './components/ResizeHandle.vue'
 import Icon from './components/Icon.vue'
+import InterviewView from './components/InterviewView.vue'
 
 import { useUIStore } from './stores/ui'
 import { useSettingsStore } from './stores/settings'
 import { useSolutionStore } from './stores/solution'
+import { useInterviewStore } from './stores/interview'
 import { on } from './services/events'
 import { api } from './services/api'
 import { initCodeBlockInteractions } from './utils/markdown-latex'
@@ -57,6 +61,8 @@ import { initCodeBlockInteractions } from './utils/markdown-latex'
 const ui = useUIStore()
 const settingsStore = useSettingsStore()
 const solution = useSolutionStore()
+const interview = useInterviewStore()
+const isInterviewMode = computed(() => settingsStore.settings.workMode === 'interview')
 
 let pendingSolveCallback = null
 
@@ -88,7 +94,21 @@ onMounted(() => {
 
   settingsStore.loadSettings().then(() => {
     settingsStore.resetStatus()
+    if (isInterviewMode.value) interview.refreshStatus()
   })
+
+  on('work-mode-changed', (mode) => {
+    settingsStore.applyWorkMode(mode)
+    if (mode === 'interview') interview.refreshStatus()
+  })
+  on('interview:status', interview.applyStatus)
+  on('interview:transcript', interview.acceptTranscript)
+  on('interview:local-transcript', interview.acceptLocalTranscript)
+  on('interview:question', interview.acceptQuestion)
+  on('interview:answer', interview.acceptAnswer)
+  on('interview:timeline', interview.acceptTimeline)
+  on('interview:sources', interview.acceptSources)
+  on('interview:error', interview.acceptError)
 
   on('key-recorded', (data) => {
     if (data && data.action) {
@@ -162,10 +182,10 @@ onMounted(() => {
     }
   }
 
-  on('toggle-visibility', (isVisibleToCapture) => {
+  on('stealth-mode-state', (enabled) => {
     ui.flash('toggle')
-    ui.isStealthMode = isVisibleToCapture
-    ui.showToast(isVisibleToCapture ? '隐身模式已开启' : '隐身模式已关闭', isVisibleToCapture ? 'info' : 'success')
+    ui.isStealthMode = enabled
+    ui.showToast(enabled ? '共享画面隔离已开启' : '共享画面隔离已关闭', enabled ? 'success' : 'info')
   })
 
   on('solution', (data) => {
@@ -200,6 +220,9 @@ onMounted(() => {
   on('solution-stream-chunk', (token) => solution.handleStreamChunk(token))
   on('solution-stream-thinking', (token) => solution.handleThinkingChunk(token))
 
+  // 快捷键触发的结束回答事件
+  on('cancel-generation', () => solution.cancelGeneration())
+
   on('solution-error', (rawErrMsg) => {
     if (rawErrMsg && (rawErrMsg.includes('context canceled') || rawErrMsg.includes('canceled'))) {
       handleUserCancellation()
@@ -225,6 +248,11 @@ onMounted(() => {
   })
 
   function handleUserCancellation() {
+    // 用户主动暂停：cancelGeneration() 已处理状态重置和内容保留
+    if (solution.isUserPaused) {
+      solution.isUserPaused = false
+      return
+    }
     if (solution.history.length > 0 && solution.activeHistoryIndex === 0) {
       const current = solution.history[0]
       if (settingsStore.settings.keepContext && current.rounds?.length > 1) {

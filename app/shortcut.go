@@ -1,5 +1,7 @@
 package app
 
+import "Q-Solver/pkg/config"
+
 // StartRecordingKey 开始录制快捷键
 func (a *App) StartRecordingKey(action string) {
 	a.shortcutService.StartRecording(action)
@@ -20,4 +22,16 @@ func (a *App) ScrollContent(direction string) {
 // CopyCode 复制代码
 func (a *App) CopyCode() {
 	a.EmitEvent("copy-code")
+}
+
+// ToggleWorkMode is registered as a global shortcut without touching existing
+// visibility, minimisation, or display-protection shortcuts.
+func (a *App) ToggleWorkMode() {
+	_ = a.configManager.Patch(func(cfg *config.Config) {
+		if cfg.WorkMode == "interview" {
+			cfg.WorkMode = "written"
+		} else {
+			cfg.WorkMode = "interview"
+		}
+	})
 }

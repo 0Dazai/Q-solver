@@ -19,6 +19,19 @@
   "windowWidth": 0,
   "windowHeight": 0,
   "theme": "light",
+  "workMode": "written",
+  "writtenModel": {
+    "provider": "openai", "model": "", "apiKey": "", "baseURL": "https://api.openai.com/v1",
+    "protocol": "openai_chat_completions", "thinkingMode": "auto", "reasoningLevel": "", "maxTokens": 0, "temperature": 0, "systemPrompt": ""
+  },
+  "interviewModel": {
+    "provider": "openai", "model": "", "apiKey": "", "baseURL": "https://api.openai.com/v1",
+    "protocol": "openai_chat_completions", "thinkingMode": "disabled", "reasoningLevel": "", "maxTokens": 0, "temperature": 0, "systemPrompt": ""
+  },
+  "transcription": {
+    "apiKey": "", "model": "fun-asr-realtime-2025-09-15", "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+    "region": "", "language": "zh", "hotwords": [], "contextPhrases": [], "sentenceWaitMs": 1300, "autoSubmit": true
+  },
   "shortcuts": {
     "screenshot": {
       "comboId": "119",
@@ -63,6 +76,10 @@
     "scroll_down": {
       "comboId": "34+164",
       "keyName": "Alt+PgDn"
+    },
+    "mode_toggle": {
+      "comboId": "117",
+      "keyName": "F6"
     }
   }
 }

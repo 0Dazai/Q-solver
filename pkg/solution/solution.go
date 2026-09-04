@@ -110,10 +110,9 @@ func (s *Solver) Solve(ctx context.Context, req Request, cb Callbacks) bool {
 
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
-			logger.Println("当前任务已中断（用户产生新输入）")
-			if cb.EmitEvent != nil {
-				cb.EmitEvent("solution-error", "context canceled")
-			}
+			// 用户主动中断，新任务已接管前端状态，无需发送错误事件
+			logger.Println("当前任务已中断（用户产生新输入），静默退出")
+			// 不发送 solution-error，避免与新任务的 start-solving 事件产生竞态
 			return false
 		}
 

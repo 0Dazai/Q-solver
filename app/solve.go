@@ -12,6 +12,10 @@ var screenshotBuffer []string
 
 func (a *App) TriggerScreenshot() {
 	cfg := a.configManager.Get()
+	if cfg.WorkMode == "interview" {
+		a.EmitEvent("toast", "面试模式下不使用截图答题")
+		return
+	}
 
 	if cfg.APIKey == "" {
 		a.EmitEvent("require-api-key")
@@ -76,6 +80,10 @@ func (a *App) ClearScreenshots() {
 
 func (a *App) TriggerSend() {
 	cfg := a.configManager.Get()
+	if cfg.WorkMode == "interview" {
+		a.EmitEvent("toast", "面试模式下不使用截图答题")
+		return
+	}
 
 	if cfg.APIKey == "" {
 		a.EmitEvent("require-api-key")
@@ -105,9 +113,8 @@ func (a *App) TriggerSend() {
 	}
 
 	if a.taskManager.HasRunningTask() {
-		logger.Println("忽略重复触发：当前有任务正在运行")
-		a.EmitEvent("toast", "正在处理中，请稍候...")
-		return
+		// 用户主动中断当前任务，StartTask 会自动取消旧上下文
+		logger.Println("当前任务将被中断，准备开始新任务")
 	}
 
 	screenshots := make([]string, len(screenshotBuffer))
@@ -154,6 +161,19 @@ func (a *App) solveInternal(ctx context.Context, screenshots []string) bool {
 
 func (a *App) CancelRunningTask() bool {
 	return a.taskManager.CancelCurrentTask()
+}
+
+// TriggerCancel interrupts the current answer in either work mode. Listening
+// remains active in interview mode and has its own configurable shortcut.
+func (a *App) TriggerCancel() {
+	if a.configManager.Get().WorkMode == "interview" && a.interviewManager != nil {
+		a.interviewManager.CancelAnswer()
+		return
+	}
+	if a.taskManager.HasRunningTask() {
+		a.CancelRunningTask()
+		a.EmitEvent("cancel-generation", nil)
+	}
 }
 
 func (a *App) IsInterruptThinkingEnabled() bool {

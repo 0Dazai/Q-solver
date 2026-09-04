@@ -9,10 +9,11 @@
       <div class="modal-header">
         <div class="tabs">
           <div class="tab" :class="{ active: ui.activeTab === 'general' }" @click="ui.activeTab = 'general'">常规</div>
-          <div class="tab" :class="{ active: ui.activeTab === 'model' }" @click="ui.activeTab = 'model'">模型</div>
+          <div class="tab" :class="{ active: ui.activeTab === 'api' }" @click="ui.activeTab = 'api'">模型连接</div>
           <div class="tab" :class="{ active: ui.activeTab === 'screenshot' }" @click="ui.activeTab = 'screenshot'">截图</div>
           <div class="tab" :class="{ active: ui.activeTab === 'resume' }" @click="ui.activeTab = 'resume'">简历</div>
-          <div class="tab" :class="{ active: ui.activeTab === 'api' }" @click="ui.activeTab = 'api'">API</div>
+          <div class="tab" :class="{ active: ui.activeTab === 'knowledge' }" @click="ui.activeTab = 'knowledge'">资料库</div>
+          <div class="tab" :class="{ active: ui.activeTab === 'transcription' }" @click="ui.activeTab = 'transcription'">语音转写</div>
         </div>
         <button class="close-btn" @click="settingsStore.closeSettings">
           <Icon name="x" :size="16" />
@@ -21,6 +22,13 @@
 
       <div class="modal-body">
         <div v-show="ui.activeTab === 'general'" class="tab-pane">
+          <div class="form-group">
+            <label>工作模式</label>
+            <div class="mode-control">
+              <label><input v-model="settingsStore.tempSettings.workMode" type="radio" value="written" /> 笔试模式</label>
+              <label><input v-model="settingsStore.tempSettings.workMode" type="radio" value="interview" /> 面试模式</label>
+            </div>
+          </div>
           <div class="form-group">
             <label>快捷键配置 {{ settingsStore.isMacOS ? '(macOS 使用固定快捷键)' : '(点击录制)' }}</label>
             <div class="shortcut-list">
@@ -54,69 +62,18 @@
           </div>
         </div>
 
-        <div v-show="ui.activeTab === 'model'" class="tab-pane model-tab">
-          <div class="form-group model-select-group">
-            <div class="model-header">
-              <label>模型选择</label>
-              <div class="model-actions">
-                <button
-                  class="btn-icon"
-                  @click="settingsStore.refreshModels"
-                  :disabled="ui.isLoadingModels || !settingsStore.tempSettings.apiKey"
-                  title="刷新模型列表"
-                >
-                  <svg class="action-icon" :class="{ spin: ui.isLoadingModels }" viewBox="0 0 16 16" fill="none">
-                    <path d="M14 8a6 6 0 01-10.24 4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                    <path d="M2 8a6 6 0 0110.24-4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                    <path d="M14 3v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                    <path d="M2 13V8h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  class="btn-icon"
-                  @click="settingsStore.testConnection"
-                  :disabled="ui.isTestingConnection || !settingsStore.tempSettings.model"
-                  title="测试模型连通性"
-                >
-                  <svg v-if="ui.isTestingConnection" class="action-icon spin" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="28 10" stroke-linecap="round" />
-                  </svg>
-                  <svg v-else class="action-icon" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 3l9 5-9 5V3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-                  </svg>
-                </button>
-              </div>
+        <div v-show="ui.activeTab === 'api'" class="tab-pane model-tab">
+          <div class="form-group">
+            <label>编辑的模型连接</label>
+            <div class="mode-control">
+              <label><input v-model="apiProfileMode" type="radio" value="written" /> 笔试模型连接</label>
+              <label><input v-model="apiProfileMode" type="radio" value="interview" /> 面试模型连接</label>
             </div>
-
-            <ModelSelect v-model="settingsStore.tempSettings.model" :models="ui.availableModels" :loading="ui.isLoadingModels" />
-
-            <div class="manual-model-shell">
-              <input
-                v-model.trim="settingsStore.tempSettings.model"
-                class="manual-model-input"
-                placeholder="粘贴模型 ID 或接入点 ID，例如 doubao-seed-2-0-lite-260428 / ep-..."
-              />
-            </div>
-
-            <div v-if="ui.connectionStatus" class="connection-status" :class="ui.connectionStatus.type">
-              <span class="cs-icon">{{ ui.connectionStatus.icon }}</span>
-              <span class="cs-text">{{ ui.connectionStatus.message }}</span>
-            </div>
-
-            <p v-if="!settingsStore.tempSettings.apiKey" class="hint-text warning-hint">请先填写 API Key</p>
           </div>
-
-          <div class="form-group domain-group">
+          <ModelProfileForm v-if="apiProfileMode === 'written'" :profile="settingsStore.tempSettings.writtenModel" mode="written" label="笔试" :models="settingsStore.modelLists.written" :loading="settingsStore.modelLoading.written" :testing="settingsStore.modelTesting.written" :connection-status="settingsStore.modelConnections.written" @refresh="settingsStore.refreshModels('written')" @test="settingsStore.testConnection('written')" />
+          <ModelProfileForm v-else :profile="settingsStore.tempSettings.interviewModel" mode="interview" label="面试" :models="settingsStore.modelLists.interview" :loading="settingsStore.modelLoading.interview" :testing="settingsStore.modelTesting.interview" :connection-status="settingsStore.modelConnections.interview" @refresh="settingsStore.refreshModels('interview')" @test="settingsStore.testConnection('interview')" />
+          <div v-if="apiProfileMode === 'written'" class="form-group domain-group">
             <DomainSelector v-model="settingsStore.tempSettings.domainId" :categories="settingsStore.domainCategories" />
-          </div>
-
-          <div class="form-group extra-prompt-group">
-            <label>附加要求</label>
-            <textarea
-              v-model.trim="settingsStore.tempSettings.prompt"
-              class="extra-prompt-input"
-              placeholder="例如：编程题默认使用 Java 解答；若题目未指定语言，不要使用 Python。"
-            ></textarea>
           </div>
         </div>
 
@@ -136,11 +93,23 @@
           />
         </div>
 
-        <div v-show="ui.activeTab === 'api'" class="tab-pane api-tab-pane">
-          <ProviderSelect
-            v-model:apiKey="settingsStore.tempSettings.apiKey"
-            v-model:baseURL="settingsStore.tempSettings.baseURL"
-          />
+        <div v-if="ui.activeTab === 'knowledge'" class="tab-pane">
+          <KnowledgeSettings />
+        </div>
+
+        <div v-show="ui.activeTab === 'transcription'" class="tab-pane model-tab">
+          <div class="form-group"><label>转写引擎</label><select v-model="settingsStore.tempSettings.transcription.engine" class="manual-model-input boxed-input"><option value="auto">自动（优先千问，无 Key 时 Windows）</option><option value="dashscope">千问实时 ASR</option><option value="windows">Windows 系统语音识别</option></select></div>
+          <div class="form-group"><label>千问 API Key <span v-if="settingsStore.tempSettings.transcription.apiKeySet" class="saved-key">已安全保存</span></label><input v-model="settingsStore.tempSettings.transcription.apiKey" class="manual-model-input boxed-input" type="password" autocomplete="off" :placeholder="settingsStore.tempSettings.transcription.apiKeySet ? '留空保持当前 Key，输入内容将替换' : '保存后不会回传到前端'" /></div>
+          <p class="hint-text">未配置千问 Key 时，面试模式使用本机 Windows 语音识别；仅支持已安装的中文（简体）系统识别器。</p>
+          <div class="form-group"><label>模型名</label><input v-model.trim="settingsStore.tempSettings.transcription.model" class="manual-model-input boxed-input" /></div>
+          <div class="form-group"><label>区域或服务地址</label><input v-model.trim="settingsStore.tempSettings.transcription.endpoint" class="manual-model-input boxed-input" /></div>
+          <div class="profile-grid"><div class="form-group"><label>区域</label><input v-model.trim="settingsStore.tempSettings.transcription.region" class="manual-model-input boxed-input" placeholder="可选" /></div><div class="form-group"><label>语言</label><input v-model.trim="settingsStore.tempSettings.transcription.language" class="manual-model-input boxed-input" /></div><div class="form-group"><label>句末等待 (ms)</label><input v-model.number="settingsStore.tempSettings.transcription.sentenceWaitMs" class="manual-model-input boxed-input" type="number" min="300" max="10000" /></div></div>
+          <div class="form-group"><label>百炼热词表 ID</label><input v-model.trim="settingsStore.tempSettings.transcription.vocabularyId" class="manual-model-input boxed-input" placeholder="可选：已在百炼创建的 vocabulary_id" /></div>
+          <div class="form-group"><label>热词备注</label><textarea v-model="settingsStore.tempSettings.transcription.hotwords" class="extra-prompt-input" placeholder="每行或逗号分隔；可作为本地配置说明"></textarea></div>
+          <div class="form-group"><label>上下文词表</label><textarea v-model="settingsStore.tempSettings.transcription.contextPhrases" class="extra-prompt-input" placeholder="每行或逗号分隔"></textarea></div>
+          <p class="hint-text">默认模型仅支持语言提示和百炼热词表 ID；上下文词表会在支持 context 的 Fun-ASR 实时模型中发送。</p>
+          <label class="inline-check"><input v-model="settingsStore.tempSettings.transcription.autoSubmit" type="checkbox" /> 自动提交稳定问题</label>
+          <button class="btn-secondary" :disabled="ui.isTestingConnection" @click="settingsStore.testTranscription">测试连接</button>
         </div>
       </div>
 
@@ -152,18 +121,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useUIStore } from '../stores/ui'
 import { useSettingsStore } from '../stores/settings'
 import ResumeImport from './ResumeImport.vue'
-import ProviderSelect from './ProviderSelect.vue'
-import ModelSelect from './ModelSelect.vue'
+import KnowledgeSettings from './KnowledgeSettings.vue'
+import ModelProfileForm from './ModelProfileForm.vue'
 import DomainSelector from './DomainSelector.vue'
 import ScreenshotSettings from './ScreenshotSettings.vue'
 import Icon from './Icon.vue'
 
 const ui = useUIStore()
 const settingsStore = useSettingsStore()
+const apiProfileMode = ref('written')
 
 const screenshotConfig = computed({
   get: () => ({
@@ -198,7 +168,7 @@ const screenshotConfig = computed({
 }
 
 .modal-content {
-  width: 520px;
+  width: 680px;
   max-width: 92vw;
   height: 580px;
   max-height: 85vh;
@@ -246,6 +216,9 @@ const screenshotConfig = computed({
 .tabs {
   display: flex;
   gap: var(--sp-1);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .tab {
@@ -368,6 +341,24 @@ const screenshotConfig = computed({
   font-size: var(--text-sm);
   padding: 0 var(--sp-3);
 }
+
+.boxed-input {
+  box-sizing: border-box;
+  min-height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-input);
+  padding: 0 var(--sp-3);
+}
+
+select.boxed-input { width: 100%; color: var(--text-primary); }
+.profile-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.profile-grid .form-group { min-width: 0; }
+.mode-control { display: flex; gap: var(--sp-4); color: var(--text-secondary); font-size: var(--text-sm); }
+.mode-control label, .inline-check { display: flex; align-items: center; gap: var(--sp-2); }
+.inline-check { margin-bottom: var(--sp-4); color: var(--text-secondary); font-size: var(--text-sm); }
+.btn-secondary { padding: var(--sp-2) var(--sp-4); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-card); color: var(--text-primary); cursor: pointer; }
+.btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 
 .manual-model-input::placeholder {
   color: var(--text-muted);

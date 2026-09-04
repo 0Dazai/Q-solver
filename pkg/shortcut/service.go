@@ -74,6 +74,9 @@ func (s *Service) handleTrigger(action string) {
 	case "send":
 		logger.Println("触发发送")
 		s.delegate.TriggerSend()
+	case "cancel":
+		logger.Println("触发结束回答")
+		s.delegate.TriggerCancel()
 	case "delete":
 		logger.Println("触发删除截图")
 		s.delegate.TriggerDeleteScreenshot()
@@ -86,6 +89,12 @@ func (s *Service) handleTrigger(action string) {
 	case "minimize":
 		logger.Println("切换窗口收起/恢复")
 		s.delegate.ToggleMinimizeWindow()
+	case "mode_toggle":
+		s.delegate.ToggleWorkMode()
+	case "interview_listening":
+		if errMsg := s.delegate.ToggleInterviewListening(); errMsg != "" {
+			s.delegate.EmitEvent("toast", errMsg)
+		}
 	case "move_up":
 		s.delegate.MoveWindow(0, -10)
 	case "move_down":

@@ -7,7 +7,7 @@
       </div>
       <h3 class="empty-title">准备就绪</h3>
       <p class="empty-desc">
-        按 <kbd class="shortcut-key">{{ shortcut }}</kbd> 截图，<kbd class="shortcut-key">{{ sendShortcut }}</kbd> 发送解题
+        按 <kbd class="shortcut-key">{{ displayShortcut }}</kbd> 截图，<kbd class="shortcut-key">{{ displaySendShortcut }}</kbd> 发送解题
       </p>
     </div>
   </div>
@@ -20,10 +20,14 @@ import Icon from './Icon.vue'
 
 const settingsStore = useSettingsStore()
 
-defineProps({
-  shortcut: { type: String, default: 'F8' },
-  sendShortcut: { type: String, default: 'Ctrl+J' }
+const props = defineProps({
+  shortcut: { type: String, default: '' },
+  sendShortcut: { type: String, default: '' },
 })
+
+// 优先使用 props，其次使用 settingsStore 动态值
+const displayShortcut = computed(() => props.shortcut || settingsStore.solveShortcut)
+const displaySendShortcut = computed(() => props.sendShortcut || settingsStore.sendShortcut)
 
 const contentOpacity = computed(() => {
   const t = settingsStore.settings.transparency ?? 0
