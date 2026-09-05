@@ -43,6 +43,7 @@ type Manager struct {
 	profileKeywords    ProfileKeywords
 	historyRecorder    HistoryRecorder
 	retrievalLog       *RetrievalLogger
+	latency            *LatencyTracker
 	activeTurnID       string
 	activeQuestionID   string
 	candidateAnswers   map[string]string
@@ -90,6 +91,7 @@ func NewManager(configFn func() config.Config, emit func(string, ...any), execut
 	manager := &Manager{
 		config: configFn, emit: emit, executor: executor, retrievalLog: NewRetrievalLogger(),
 		answerChunkStarted: make(map[string]bool),
+		latency:            NewLatencyTracker(),
 	}
 	if httpExecutor, ok := executor.(*HTTPAnswerExecutor); ok && manager.retrievalLog != nil {
 		httpExecutor.OnTiming = manager.retrievalLog.LogAnswerTiming
@@ -101,7 +103,12 @@ func NewManager(configFn func() config.Config, emit func(string, ...any), execut
 		}
 		return profile
 	}, manager.handleAnswerState, manager.emitAnswerChunk, manager.finishAnswer)
+	manager.answers.SetJobTimingListener(manager.recordJobTiming)
 	return manager
+}
+
+func (m *Manager) recordJobTiming(question Question, timing JobTiming) {
+	m.latency.MarkQueueTiming(question.QuestionID, timing)
 }
 
 func (m *Manager) Start(parent context.Context) error {
@@ -700,6 +707,7 @@ func (m *Manager) submit(question Question) {
 	// already-submitted turn and then discarded by the later reset.
 	if aggregator != nil {
 		aggregator.ResetTurn()
+		aggregator.SetPreviousHint(question.CorrectedText)
 	}
 	questionEvent := TimelineEvent{
 		MessageID: timelineMessageID(question.SessionID, "question", question.QuestionID), SessionID: question.SessionID,
@@ -781,7 +789,9 @@ func (m *Manager) submit(question Question) {
 			decision = "执行检索但无高质量命中"
 		}
 	}
+	contextBuildStart := time.Now()
 	answerInput, citations := buildPlannedAnswerInput(question.CorrectedText, localFinals, candidateProfile, plan, mode, results)
+	contextBuildMS := time.Since(contextBuildStart).Milliseconds()
 	if len(citations) > 0 {
 		m.emit("interview:sources", map[string]any{
 			"sessionId": m.Status().SessionID, "questionId": question.QuestionID, "items": citations,
@@ -807,7 +817,16 @@ func (m *Manager) submit(question Question) {
 		m.retrievalLog.LogPipeline("API 已入队", question.CorrectedText,
 			fmt.Sprintf("provider=%s model=%s protocol=%s type=%s", answerProfile.Provider, answerProfile.Model, answerProfile.Protocol, plan.Type))
 	}
-	answers.SubmitWithProfile(ctx, question, answerInput, answerProfile)
+	submitAt := time.Now()
+	m.latency.Register(&QuestionLatency{
+		SessionID: question.SessionID, QuestionID: question.QuestionID, Question: question.CorrectedText,
+		ASRAt: question.LastSpeechAt, ReadyAt: submitAt, SubmitAt: submitAt,
+		RetrievalMS: searchDuration, ContextBuildMS: contextBuildMS,
+	})
+	queueState := answers.SubmitWithProfile(ctx, question, answerInput, answerProfile)
+	if queueState == "" {
+		m.latency.Discard(question.QuestionID)
+	}
 	m.mu.Lock()
 	m.deepenRequested = false
 	m.mu.Unlock()
@@ -842,6 +861,7 @@ func (m *Manager) emitAnswerChunk(question Question, chunk string) {
 	hasStarted := m.answerChunkStarted[key]
 	m.answerChunkStarted[key] = true
 	m.mu.Unlock()
+	m.latency.MarkAnswerChunk(question.QuestionID, time.Now())
 	m.emit("interview:answer", map[string]string{"sessionId": question.SessionID, "questionId": question.QuestionID, "text": chunk})
 	m.emit("interview:timeline", TimelineEvent{
 		MessageID: key, SessionID: question.SessionID,
@@ -864,6 +884,10 @@ func (m *Manager) finishAnswer(question Question, answer string, err error) {
 	}
 	m.mu.Unlock()
 	var event TimelineEvent
+	outcome := NormalizeLatencyOutcome(err)
+	if errors.Is(err, context.Canceled) {
+		outcome = LatencyOutcomeCanceled
+	}
 	if err == nil && answer != "" && a != nil {
 		a.RememberAnswer(answer)
 		event = TimelineEvent{
@@ -879,8 +903,14 @@ func (m *Manager) finishAnswer(question Question, answer string, err error) {
 		case errors.Is(err, context.Canceled):
 			content = "已停止生成。"
 			status = interviewhistory.StatusCancelled
+			if answer != "" {
+				content += "\n已生成的部分内容：\n" + answer
+			}
 		case err != nil:
 			content = "回答生成失败：" + err.Error()
+			if answer != "" {
+				content = answer + "\n\n（生成中断，可重新提交：" + err.Error() + "）"
+			}
 			m.mu.Lock()
 			if m.status.LastError == "" {
 				m.status.LastError = err.Error()
@@ -899,6 +929,9 @@ func (m *Manager) finishAnswer(question Question, answer string, err error) {
 		if recorder != nil {
 			_ = recorder.UpsertMessage(historyMessage(event))
 		}
+	}
+	if record, ok := m.latency.Finish(question.QuestionID, outcome); ok && m.retrievalLog != nil {
+		m.retrievalLog.LogQuestionLatency(*record)
 	}
 	m.emitStatus()
 }

@@ -6,9 +6,9 @@
   <p>一个面向桌面场景的 AI 答题助手。支持隐藏模式、鼠标穿透、不抢焦点，用你自己的 API Key 就能直接开始。</p>
 
   <p>
-    <a href="https://github.com/jym66/Q-solver/stargazers"><img src="https://img.shields.io/github/stars/jym66/Q-solver?color=ffcb6b&style=for-the-badge&labelColor=30363d" alt="Stars"></a>
-    <a href="https://github.com/jym66/Q-solver/releases"><img src="https://img.shields.io/github/v/release/jym66/Q-solver?color=89d185&style=for-the-badge&labelColor=30363d" alt="Release"></a>
-    <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=30363d" alt="Go">
+    <a href="https://github.com/0Dazai/Q-solver/stargazers"><img src="https://img.shields.io/github/stars/0Dazai/Q-solver?color=ffcb6b&style=for-the-badge&labelColor=30363d" alt="Stars"></a>
+    <a href="https://github.com/0Dazai/Q-solver/releases"><img src="https://img.shields.io/github/v/release/0Dazai/Q-solver?color=89d185&style=for-the-badge&labelColor=30363d" alt="Release"></a>
+    <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=30363d" alt="Go">
     <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white&labelColor=30363d" alt="Vue">
     <img src="https://img.shields.io/badge/Wails-v2-E30613?style=for-the-badge&logo=wails&logoColor=white&labelColor=30363d" alt="Wails">
   </p>
@@ -103,7 +103,7 @@ Q-Solver 是一个桌面端 AI 做题助手。
 
 ### 方式一：直接下载
 
-前往 [Releases](https://github.com/jym66/Q-solver/releases) 下载对应系统版本。
+前往 [Releases](https://github.com/0Dazai/Q-solver/releases) 下载对应系统版本。
 
 > [!NOTE]
 > macOS 首次运行如果提示无法打开，可执行：
@@ -116,14 +116,14 @@ Q-Solver 是一个桌面端 AI 做题助手。
 
 环境要求：
 
-- Go 1.25+
+- Go 1.24+
 - Node.js 22+
 - Wails CLI
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-git clone https://github.com/jym66/Q-solver.git
+git clone https://github.com/0Dazai/Q-solver.git
 cd Q-Solver
 
 wails dev
@@ -180,8 +180,8 @@ wails build -ldflags "-s -w" -tags prod
 ## Star History
 
 <div align="center">
-  <a href="https://star-history.com/#jym66/Q-solver&Date">
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=jym66/Q-solver&type=Date" />
+  <a href="https://star-history.com/#0Dazai/Q-solver&Date">
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=0Dazai/Q-solver&type=Date" />
   </a>
 </div>
 
@@ -195,5 +195,5 @@ wails build -ldflags "-s -w" -tags prod
 
 <div align="center">
   <p>如果你喜欢这种“截图即解题”的桌面 AI 工作流，欢迎点一个 Star。</p>
-  <p><a href="https://github.com/jym66">jym66</a></p>
+  <p><a href="https://github.com/0Dazai">jym66</a></p>
 </div>

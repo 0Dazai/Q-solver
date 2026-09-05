@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -25,15 +26,42 @@ func ExtractPDFText(path string) (string, error) {
 	return "", fmt.Errorf("PDF 文本提取与本地 OCR 均未得到内容")
 }
 
+// pdfTool locates an external PDF helper binary. Lookup order:
+//  1. PATH (works for standard installs and non-Windows systems);
+//  2. Q_SOLVER_PDF_TOOLS environment variable (os.PathListSeparator separated),
+//     letting users point at any portable poppler/tesseract directory;
+//  3. MSYS2 environment roots and the common default MSYS2 install drives.
+//
+// No machine-specific path is required for a working install: a tool on PATH
+// or a configured Q_SOLVER_PDF_TOOLS value is enough.
 func pdfTool(name string) (string, error) {
 	if path, err := exec.LookPath(name); err == nil {
 		return path, nil
 	}
-	candidate := filepath.Join(`D:\msys64\mingw64\bin`, name+".exe")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
+	for _, dir := range pdfToolDirs() {
+		candidate := filepath.Join(dir, name)
+		if runtime.GOOS == "windows" {
+			candidate += ".exe"
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
 	}
-	return "", fmt.Errorf("未找到本地 PDF 工具 %s", name)
+	return "", fmt.Errorf("未找到本地 PDF 工具 %s，可将其加入 PATH 或用 Q_SOLVER_PDF_TOOLS 指定目录", name)
+}
+
+func pdfToolDirs() []string {
+	if custom := strings.TrimSpace(os.Getenv("Q_SOLVER_PDF_TOOLS")); custom != "" {
+		return filepath.SplitList(custom)
+	}
+	dirs := make([]string, 0, 4)
+	for _, env := range []string{"MSYS2_HOME", "MSYS_HOME"} {
+		if root := strings.TrimSpace(os.Getenv(env)); root != "" {
+			dirs = append(dirs, filepath.Join(root, "mingw64", "bin"))
+		}
+	}
+	dirs = append(dirs, `C:\msys64\mingw64\bin`, `D:\msys64\mingw64\bin`)
+	return dirs
 }
 
 func extractWithPoppler(path string) (string, error) {
