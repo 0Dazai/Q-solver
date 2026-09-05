@@ -1,6 +1,7 @@
 package interview
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -245,5 +246,175 @@ func TestSplitFinalAtQuestionBoundaries(t *testing.T) {
 	}
 	if parts[0] != "请介绍项目。" || parts[1] != "那么下一个问题，请说说团队冲突。" || parts[2] != "最后一个问题，三个词形容自己。" {
 		t.Fatalf("unexpected split segments: %+v", parts)
+	}
+}
+
+func TestShortEllipticalFollowUpsSubmitMidInterview(t *testing.T) {
+	cases := []string{
+		"为什么？", "Redis呢？", "Redis呢", "线程池呢？", "线程池呢",
+		"GC了解吧？", "GC了解吧", "项目里呢？", "项目里呢", "那具体怎么做？",
+	}
+	for _, text := range cases {
+		a := NewAggregator(1300 * time.Millisecond)
+		a.SetPreviousHint("请介绍一下你项目里的缓存设计")
+		now := time.Now()
+		a.Accept(TranscriptEvent{Kind: EventFinal, Text: text, Timestamp: now})
+		question, reason, ready := a.Ready(now.Add(1400 * time.Millisecond))
+		if !ready {
+			t.Fatalf("short follow-up %q must submit, reason=%q", text, reason)
+		}
+		if question.CorrectedText != text {
+			t.Fatalf("unexpected corrected text for %q: %q", text, question.CorrectedText)
+		}
+	}
+}
+
+func TestShortFollowUpWithoutQuestionMarkUsesConfiguredWait(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(1300 * time.Millisecond)
+	a.SetPreviousHint("介绍一下线程池的核心参数")
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "Redis呢", Timestamp: now})
+	if _, reason, ready := a.Ready(now.Add(1290 * time.Millisecond)); ready {
+		t.Fatalf("short follow-up must respect the stability window, reason=%q", reason)
+	}
+	if _, _, ready := a.Ready(now.Add(1310 * time.Millisecond)); !ready {
+		t.Fatal("short follow-up must submit after the stability window")
+	}
+}
+
+func TestFillerUtterancesNeverSubmit(t *testing.T) {
+	for _, text := range []string{"好的", "嗯", "谢谢", "明白", "OK", "好的我们继续"} {
+		a := NewAggregator(300 * time.Millisecond)
+		a.SetPreviousHint("请介绍你的项目")
+		now := time.Now()
+		a.Accept(TranscriptEvent{Kind: EventFinal, Text: text, Timestamp: now})
+		if _, reason, ready := a.Ready(now.Add(2 * time.Second)); ready {
+			t.Fatalf("filler %q must not submit as a question", text)
+		} else if reason == "" {
+			t.Fatalf("filler %q must be rejected by the intent gate", text)
+		}
+	}
+}
+
+func TestFirstQuestionStillRequiresStrictIntent(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(300 * time.Millisecond)
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "Redis呢", Timestamp: now})
+	if _, reason, ready := a.Ready(now.Add(3 * time.Second)); ready || reason != "等待完整提问" {
+		t.Fatalf("first utterance without intent must stay pending: ready=%v reason=%q", ready, reason)
+	}
+}
+
+func TestPartialOnlyShortFollowUpEventuallySubmits(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(1300 * time.Millisecond)
+	a.SetPreviousHint("介绍一下项目里的消息队列")
+	a.Accept(TranscriptEvent{Kind: EventPartial, Text: "Kafka呢", Timestamp: now})
+	// Repeated identical partials must not push the submit point further away.
+	a.Accept(TranscriptEvent{Kind: EventPartial, Text: "Kafka呢", Timestamp: now.Add(1500 * time.Millisecond)})
+	a.Accept(TranscriptEvent{Kind: EventPartial, Text: "Kafka呢", Timestamp: now.Add(3 * time.Second)})
+	question, reason, ready := a.Ready(now.Add(4 * time.Second))
+	if !ready || !strings.Contains(reason, "稳定识别文本") {
+		t.Fatalf("stable partial-only follow-up must submit, ready=%v reason=%q", ready, reason)
+	}
+	if question.CorrectedText != "Kafka呢" {
+		t.Fatalf("unexpected promoted text: %+v", question)
+	}
+}
+
+func TestTwentyConsecutiveQuestionsAllRelease(t *testing.T) {
+	a := NewAggregator(1300 * time.Millisecond)
+	now := time.Now()
+	previous := ""
+	turns := map[string]bool{}
+	for index := 1; index <= 20; index++ {
+		text := fmt.Sprintf("第%d个问题：Redis缓存穿透怎么解决？", index)
+		a.Accept(TranscriptEvent{Kind: EventFinal, Text: text, Timestamp: now})
+		question, reason, ready := a.Ready(now.Add(710 * time.Millisecond))
+		if !ready {
+			t.Fatalf("question %d did not submit: %q", index, reason)
+		}
+		if question.TurnID == "" || turns[question.TurnID] {
+			t.Fatalf("question %d reused or emptied a turn: %q", index, question.TurnID)
+		}
+		turns[question.TurnID] = true
+		if strings.Contains(question.CorrectedText, "第") && index > 1 && strings.Contains(question.CorrectedText, fmt.Sprintf("第%d个", index-1)) {
+			t.Fatalf("question %d was polluted by the previous question: %q", index, question.CorrectedText)
+		}
+		a.ResetTurn()
+		previous = text
+		a.SetPreviousHint(previous)
+		now = now.Add(2 * time.Second)
+	}
+}
+
+func TestStaleBlockedTurnDoesNotPolluteNextQuestion(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(500 * time.Millisecond)
+	a.SetPreviousHint("介绍一下项目")
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "好的我们继续", Timestamp: now})
+	// 5s later the blocked text had its chance; a new final must start clean.
+	if question, ok := a.SplitBeforeFinal(TranscriptEvent{Kind: EventFinal, Text: "介绍一下项目架构", Timestamp: now.Add(5 * time.Second)}, now.Add(5*time.Second)); ok {
+		t.Fatalf("blocked filler must not be submitted as a question: %+v", question)
+	}
+	q := a.Accept(TranscriptEvent{Kind: EventFinal, Text: "介绍一下项目架构", Timestamp: now.Add(5 * time.Second)})
+	if q.CorrectedText != "介绍一下项目架构" {
+		t.Fatalf("stale filler polluted the next question: %q", q.CorrectedText)
+	}
+}
+
+func TestStaleEchoTurnIsDroppedBeforeNextQuestion(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(500 * time.Millisecond)
+	a.SetPreviousHint("介绍一下项目")
+	a.RememberAnswer("我在项目里负责缓存模块的设计")
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "我在项目里负责缓存模块的设计", Timestamp: now})
+	if _, _, ready := a.Ready(now.Add(2 * time.Second)); ready {
+		t.Fatal("echo must not submit")
+	}
+	if _, ok := a.SplitBeforeFinal(TranscriptEvent{Kind: EventFinal, Text: "缓存穿透怎么处理？", Timestamp: now.Add(3 * time.Second)}, now.Add(3*time.Second)); ok {
+		t.Fatal("echo must not be submitted by the split path either")
+	}
+	q := a.Accept(TranscriptEvent{Kind: EventFinal, Text: "缓存穿透怎么处理？", Timestamp: now.Add(3 * time.Second)})
+	if q.CorrectedText != "缓存穿透怎么处理？" {
+		t.Fatalf("echo polluted the next question: %q", q.CorrectedText)
+	}
+}
+
+func TestSplitBeforeFinalSubmitsStaleSuppressedQuestion(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(time.Second)
+	a.SetPreviousHint("上一轮问题")
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "说说你踩过的最大的坑？", Timestamp: now})
+	a.MarkLocalSpeech(now.Add(10 * time.Second))
+	if _, _, ready := a.Ready(now.Add(1500 * time.Millisecond)); ready {
+		t.Fatal("local speech must suppress automatic submit")
+	}
+	question, ok := a.SplitBeforeFinal(TranscriptEvent{Kind: EventFinal, Text: "那第二个问题，说说你的优点。", Timestamp: now.Add(2 * time.Second)}, now.Add(2*time.Second))
+	if !ok || question.CorrectedText != "说说你踩过的最大的坑？" || !question.Submitted {
+		t.Fatalf("stale suppressed question should submit late: %+v ok=%v", question, ok)
+	}
+}
+
+func TestNaturalPauseStillAppendsWithinStabilityWindow(t *testing.T) {
+	now := time.Now()
+	a := NewAggregator(1300 * time.Millisecond)
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "介绍一下Redis", Timestamp: now})
+	if _, ok := a.SplitBeforeFinal(TranscriptEvent{Kind: EventFinal, Text: "以及持久化。", Timestamp: now.Add(600 * time.Millisecond)}, now.Add(600*time.Millisecond)); ok {
+		t.Fatal("natural pause within the window must not split the turn")
+	}
+	a.Accept(TranscriptEvent{Kind: EventFinal, Text: "以及持久化。", Timestamp: now.Add(600 * time.Millisecond)})
+	q, _, ready := a.Ready(now.Add(2200 * time.Millisecond))
+	if !ready || len(q.Finals) != 2 {
+		t.Fatalf("expected one merged two-part question: %+v ready=%v", q, ready)
+	}
+}
+
+func TestManualSubmitAllowsShortFollowUp(t *testing.T) {
+	a := NewAggregator(time.Second)
+	a.ReplaceCurrent("Redis呢")
+	q, ok := a.SubmitCurrent(time.Now())
+	if !ok || q.CorrectedText != "Redis呢" {
+		t.Fatalf("manual submit of a short follow-up failed: %+v ok=%v", q, ok)
 	}
 }

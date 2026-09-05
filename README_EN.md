@@ -6,9 +6,9 @@
   <p>Capture a question, keep the window floating, and get answers fast. Supports hidden mode, click-through, and low-distraction use with your own API key.</p>
 
   <p>
-    <a href="https://github.com/jym66/Q-solver/stargazers"><img src="https://img.shields.io/github/stars/jym66/Q-solver?color=ffcb6b&style=for-the-badge&labelColor=30363d" alt="Stars"></a>
-    <a href="https://github.com/jym66/Q-solver/releases"><img src="https://img.shields.io/github/v/release/jym66/Q-solver?color=89d185&style=for-the-badge&labelColor=30363d" alt="Release"></a>
-    <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=30363d" alt="Go">
+    <a href="https://github.com/0Dazai/Q-solver/stargazers"><img src="https://img.shields.io/github/stars/0Dazai/Q-solver?color=ffcb6b&style=for-the-badge&labelColor=30363d" alt="Stars"></a>
+    <a href="https://github.com/0Dazai/Q-solver/releases"><img src="https://img.shields.io/github/v/release/0Dazai/Q-solver?color=89d185&style=for-the-badge&labelColor=30363d" alt="Release"></a>
+    <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=30363d" alt="Go">
     <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white&labelColor=30363d" alt="Vue">
     <img src="https://img.shields.io/badge/Wails-v2-E30613?style=for-the-badge&logo=wails&logoColor=white&labelColor=30363d" alt="Wails">
   </p>
@@ -103,7 +103,7 @@ Its core strengths are:
 
 ### Option 1: Download the App
 
-Download the latest release for your system from [Releases](https://github.com/jym66/Q-solver/releases).
+Download the latest release for your system from [Releases](https://github.com/0Dazai/Q-solver/releases).
 
 > [!NOTE]
 > If macOS blocks the app on first launch, run:
@@ -116,14 +116,14 @@ Download the latest release for your system from [Releases](https://github.com/j
 
 Requirements:
 
-- Go 1.25+
+- Go 1.24+
 - Node.js 22+
 - Wails CLI
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-git clone https://github.com/jym66/Q-solver.git
+git clone https://github.com/0Dazai/Q-solver.git
 cd Q-Solver
 
 wails dev
@@ -180,8 +180,8 @@ Default shortcuts:
 ## Star History
 
 <div align="center">
-  <a href="https://star-history.com/#jym66/Q-solver&Date">
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=jym66/Q-solver&type=Date" />
+  <a href="https://star-history.com/#0Dazai/Q-solver&Date">
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=0Dazai/Q-solver&type=Date" />
   </a>
 </div>
 
@@ -195,5 +195,5 @@ This project is published under **CC BY-NC 4.0** as source-available software fo
 
 <div align="center">
   <p>If you like this screenshot-first AI workflow, a Star would mean a lot.</p>
-  <p><a href="https://github.com/jym66">jym66</a></p>
+  <p><a href="https://github.com/0Dazai">jym66</a></p>
 </div>

@@ -25,3 +25,17 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Runtime data must never enter the repository (databases, indexes, records)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+面试记录/
+backups/
+
+# OCR scratch output and local model caches
+q-solver-pdf-ocr-*/
+*.onnx
+*.gguf

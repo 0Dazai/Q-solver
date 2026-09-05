@@ -3,6 +3,7 @@ package interview
 import (
 	"context"
 	"sync"
+	"time"
 
 	"Q-Solver/pkg/config"
 )
@@ -20,13 +21,21 @@ const (
 )
 
 type answerJob struct {
-	id       uint64
-	ctx      context.Context
-	cancel   context.CancelFunc
-	question Question
-	input    string
-	profile  config.AnswerModelConfig
-	ready    chan struct{}
+	id         uint64
+	ctx        context.Context
+	cancel     context.CancelFunc
+	question   Question
+	input      string
+	profile    config.AnswerModelConfig
+	ready      chan struct{}
+	enqueuedAt time.Time
+}
+
+// JobTiming reports per-request queueing and execution durations so the
+// manager can attribute end-to-end latency to each question.
+type JobTiming struct {
+	QueueWaitMS int64 // SubmitWithProfile -> executor dispatch
+	ActiveMS    int64 // executor dispatch -> stream finished (slot occupied)
 }
 
 // AnswerCoordinator allows a small number of model requests to run together.
@@ -41,6 +50,7 @@ type AnswerCoordinator struct {
 	onState  func(Question, AnswerQueueState)
 	onChunk  func(Question, string)
 	onDone   func(Question, string, error)
+	onTiming func(Question, JobTiming)
 
 	active         map[uint64]*answerJob
 	pending        []*answerJob
@@ -66,6 +76,12 @@ func NewAnswerCoordinator(
 	return coordinator
 }
 
+func (c *AnswerCoordinator) SetJobTimingListener(listener func(Question, JobTiming)) {
+	c.mu.Lock()
+	c.onTiming = listener
+	c.mu.Unlock()
+}
+
 func (c *AnswerCoordinator) Submit(parent context.Context, question Question, input string) AnswerQueueState {
 	profile := config.AnswerModelConfig{}
 	if c != nil && c.profile != nil {
@@ -79,7 +95,7 @@ func (c *AnswerCoordinator) SubmitWithProfile(parent context.Context, question Q
 		return ""
 	}
 	ctx, cancel := context.WithCancel(parent)
-	job := &answerJob{ctx: ctx, cancel: cancel, question: question, input: input, profile: profile, ready: make(chan struct{})}
+	job := &answerJob{ctx: ctx, cancel: cancel, question: question, input: input, profile: profile, ready: make(chan struct{}), enqueuedAt: time.Now()}
 
 	c.mu.Lock()
 	if c.closed {
@@ -112,11 +128,13 @@ func (c *AnswerCoordinator) SubmitWithProfile(parent context.Context, question Q
 func (c *AnswerCoordinator) run(job *answerJob) {
 	for job != nil {
 		<-job.ready
+		dispatchedAt := time.Now()
 		answer, err := c.executor.Stream(job.ctx, job.profile, job.input, func(chunk string) {
 			if c.isActive(job) && job.ctx.Err() == nil && c.onChunk != nil {
 				c.onChunk(job.question, chunk)
 			}
 		})
+		activeMS := time.Since(dispatchedAt).Milliseconds()
 
 		c.mu.Lock()
 		delete(c.active, job.id)
@@ -126,6 +144,12 @@ func (c *AnswerCoordinator) run(job *answerJob) {
 		}
 		c.mu.Unlock()
 
+		if c.onTiming != nil {
+			c.onTiming(job.question, JobTiming{
+				QueueWaitMS: dispatchedAt.Sub(job.enqueuedAt).Milliseconds(),
+				ActiveMS:    activeMS,
+			})
+		}
 		c.publishDone(job.question, answer, err)
 		job.cancel()
 		job = next

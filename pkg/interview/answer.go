@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"Q-Solver/pkg/config"
@@ -30,9 +32,53 @@ type AnswerTiming struct {
 	TotalBytes   int
 }
 
+// Centralized realtime-answer timeouts. A hung model request must never hold a
+// concurrency lane forever: with two lanes, two dead SSE streams would stop
+// every later interview question until the session is restarted.
+const (
+	// defaultFirstTokenTimeout bounds connect + TLS + model queueing + prompt
+	// processing, i.e. everything before the first usable answer chunk.
+	defaultFirstTokenTimeout = 8 * time.Second
+	// defaultIdleTimeout bounds a stall in the middle of an SSE stream.
+	defaultIdleTimeout = 15 * time.Second
+	// defaultTotalTimeout bounds the whole spoken-style answer request.
+	defaultTotalTimeout = 30 * time.Second
+	// deepAnswerTotalTimeout applies to deepen requests, which enable reasoning
+	// and allow 450-750 汉字 output.
+	deepAnswerTotalTimeout = 90 * time.Second
+)
+
 type HTTPAnswerExecutor struct {
 	Client   *http.Client
 	OnTiming func(AnswerTiming)
+	// Overrides for tests and future config wiring; zero uses the defaults.
+	FirstTokenTimeout time.Duration
+	IdleTimeout       time.Duration
+	TotalTimeout      time.Duration
+}
+
+func (e *HTTPAnswerExecutor) firstTokenTimeout() time.Duration {
+	if e != nil && e.FirstTokenTimeout > 0 {
+		return e.FirstTokenTimeout
+	}
+	return defaultFirstTokenTimeout
+}
+
+func (e *HTTPAnswerExecutor) idleTimeout() time.Duration {
+	if e != nil && e.IdleTimeout > 0 {
+		return e.IdleTimeout
+	}
+	return defaultIdleTimeout
+}
+
+func (e *HTTPAnswerExecutor) totalTimeout(profile config.AnswerModelConfig) time.Duration {
+	if e != nil && e.TotalTimeout > 0 {
+		return e.TotalTimeout
+	}
+	if strings.EqualFold(strings.TrimSpace(profile.ThinkingMode), "enabled") {
+		return deepAnswerTotalTimeout
+	}
+	return defaultTotalTimeout
 }
 
 func (e *HTTPAnswerExecutor) Stream(ctx context.Context, profile config.AnswerModelConfig, question string, onChunk func(string)) (string, error) {
@@ -51,7 +97,10 @@ func (e *HTTPAnswerExecutor) Stream(ctx context.Context, profile config.AnswerMo
 		return "", err
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+path, bytes.NewReader(body))
+	totalTimeout := e.totalTimeout(profile)
+	reqCtx, cancelTotal := context.WithTimeout(ctx, totalTimeout)
+	defer cancelTotal()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, base+path, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -62,11 +111,57 @@ func (e *HTTPAnswerExecutor) Stream(ctx context.Context, profile config.AnswerMo
 	if client == nil {
 		client = http.DefaultClient
 	}
+	// The watchdog cancels the request when no SSE data arrives in time. It
+	// enforces the first-token deadline until the first chunk arrives and the
+	// idle deadline afterwards, so both a slow model queue and a mid-stream
+	// hang free the concurrency lane instead of blocking later questions.
 	start := time.Now()
+	timeoutHit := make(chan string, 1)
+	watchdogDone := make(chan struct{})
+	firstChunkDone := make(chan struct{})
+	var firstChunkOnce sync.Once
+	var lastActivity atomic.Int64
+	lastActivity.Store(start.UnixNano())
+	go func() {
+		defer close(watchdogDone)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reqCtx.Done():
+				return
+			case now := <-ticker.C:
+				select {
+				case <-firstChunkDone:
+					if now.Sub(time.Unix(0, lastActivity.Load())) > e.idleTimeout() {
+						select {
+						case timeoutHit <- "idle":
+						default:
+						}
+						cancelTotal()
+						return
+					}
+				default:
+					if now.Sub(start) > e.firstTokenTimeout() {
+						select {
+						case timeoutHit <- "first-token":
+						default:
+						}
+						cancelTotal()
+						return
+					}
+				}
+			}
+		}
+	}()
+	defer func() {
+		cancelTotal()
+		<-watchdogDone
+	}()
 	resp, err := client.Do(req)
 	connectMS := time.Since(start).Milliseconds()
 	if err != nil {
-		return "", err
+		return "", streamError(err, timeoutHit, e.firstTokenTimeout(), totalTimeout)
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -110,10 +205,12 @@ func (e *HTTPAnswerExecutor) Stream(ctx context.Context, profile config.AnswerMo
 			if onChunk != nil {
 				onChunk(chunk)
 			}
+			lastActivity.Store(time.Now().UnixNano())
+			firstChunkOnce.Do(func() { close(firstChunkDone) })
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return answer.String(), err
+		return answer.String(), streamError(err, timeoutHit, e.firstTokenTimeout(), totalTimeout)
 	}
 	totalMS := time.Since(start).Milliseconds()
 	if e.OnTiming != nil {
@@ -137,6 +234,23 @@ func (e *HTTPAnswerExecutor) Stream(ctx context.Context, profile config.AnswerMo
 		return fallback, nil
 	}
 	return answer.String(), nil
+}
+
+// streamError keeps user cancellation recognizable as context.Canceled while
+// turning watchdog firings into explicit, sanitized timeout descriptions.
+func streamError(cause error, timeoutHit chan string, firstToken, total time.Duration) error {
+	select {
+	case reason := <-timeoutHit:
+		if reason == "first-token" {
+			return fmt.Errorf("首 Token 超时（%s），已释放回答通道", firstToken)
+		}
+		return errors.New("回答流空闲超时，已释放回答通道")
+	default:
+	}
+	if errors.Is(cause, context.DeadlineExceeded) {
+		return fmt.Errorf("总回答超时（%s），已释放回答通道", total)
+	}
+	return cause
 }
 
 func buildAnswerPayload(profile config.AnswerModelConfig, question string) (string, map[string]any, error) {
